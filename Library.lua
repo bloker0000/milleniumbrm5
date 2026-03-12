@@ -3725,8 +3725,7 @@
                 Name = "\0",
                 Parent = self.items["column"],
                 BorderColor3 = rgb(0, 0, 0),
-                Size = dim2(0, 0, 0, 0),
-                AutomaticSize = Enum.AutomaticSize.Y,
+                Size = dim2(1, 0, 0, 377),
                 BorderSizePixel = 0,
                 BackgroundColor3 = rgb(25, 25, 29),
             })
