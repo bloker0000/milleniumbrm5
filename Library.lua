@@ -3741,8 +3741,7 @@
                 Name = "\0",
                 Position = dim2(0, 1, 0, 1),
                 BorderColor3 = rgb(0, 0, 0),
-                Size = dim2(1, -2, 0, 0),
-                AutomaticSize = Enum.AutomaticSize.Y,
+                Size = dim2(1, -2, 0, 375),
                 BorderSizePixel = 0,
                 BackgroundColor3 = rgb(22, 22, 24),
             })
@@ -3882,11 +3881,67 @@
                 BackgroundColor3 = rgb(36, 36, 37),
             })
 
-            items["scroll"] = library:create("ScrollingFrame", {
+            items["button_bar"] = library:create("Frame", {
                 Parent = items["inline"],
                 Name = "\0",
                 Position = dim2(0, 0, 0, 73),
-                Size = dim2(1, 0, 0, 300),
+                Size = dim2(1, 0, 0, 28),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+            })
+
+            items["select_all"] = library:create("TextButton", {
+                FontFace = fonts.small,
+                Text = "Select All",
+                TextColor3 = rgb(200, 200, 200),
+                TextSize = 12,
+                AutoButtonColor = false,
+                Parent = items["button_bar"],
+                Name = "\0",
+                Position = dim2(0, 10, 0, 2),
+                Size = dim2(0, 70, 0, 22),
+                BorderSizePixel = 0,
+                BackgroundColor3 = rgb(33, 33, 35),
+            })
+
+            library:create("UICorner", {
+                Parent = items["select_all"],
+                CornerRadius = dim(0, 4),
+            })
+
+            items["deselect_all"] = library:create("TextButton", {
+                FontFace = fonts.small,
+                Text = "Deselect All",
+                TextColor3 = rgb(200, 200, 200),
+                TextSize = 12,
+                AutoButtonColor = false,
+                Parent = items["button_bar"],
+                Name = "\0",
+                Position = dim2(0, 86, 0, 2),
+                Size = dim2(0, 78, 0, 22),
+                BorderSizePixel = 0,
+                BackgroundColor3 = rgb(33, 33, 35),
+            })
+
+            library:create("UICorner", {
+                Parent = items["deselect_all"],
+                CornerRadius = dim(0, 4),
+            })
+
+            library:create("Frame", {
+                Parent = items["button_bar"],
+                AnchorPoint = vec2(0, 1),
+                Position = dim2(0, 8, 1, 0),
+                Size = dim2(1, -16, 0, 1),
+                BorderSizePixel = 0,
+                BackgroundColor3 = rgb(36, 36, 37),
+            })
+
+            items["scroll"] = library:create("ScrollingFrame", {
+                Parent = items["inline"],
+                Name = "\0",
+                Position = dim2(0, 0, 0, 101),
+                Size = dim2(1, 0, 0, 272),
                 BackgroundTransparency = 1,
                 BorderColor3 = rgb(0, 0, 0),
                 BorderSizePixel = 0,
@@ -4089,6 +4144,18 @@
                 items["count_label"].Text = visible_count .. "/" .. total_count
             end
             update_count()
+
+            items["select_all"].MouseButton1Click:Connect(function()
+                for _, entry in sorted_items do
+                    entry.set(true)
+                end
+            end)
+
+            items["deselect_all"].MouseButton1Click:Connect(function()
+                for _, entry in sorted_items do
+                    entry.set(false)
+                end
+            end)
 
             local function filter_list(query)
                 query = query or ""
