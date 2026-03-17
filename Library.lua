@@ -2674,6 +2674,11 @@
                     return
                 end 
 
+                if type(color) == "table" and color["Color"] then
+                    alpha = alpha or color["Transparency"]
+                    color = type(color["Color"]) == "string" and Color3.fromHex(color["Color"]) or color["Color"]
+                end
+
                 if color then 
                     h, s, v = color:ToHSV()
                 end
