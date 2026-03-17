@@ -2674,9 +2674,17 @@
                     return
                 end 
 
-                if type(color) == "table" and color["Color"] then
-                    alpha = alpha or color["Transparency"]
-                    color = type(color["Color"]) == "string" and Color3.fromHex(color["Color"]) or color["Color"]
+                if type(color) == "table" then
+                    if color["Color"] then
+                        alpha = alpha or color["Transparency"]
+                        color = type(color["Color"]) == "string" and Color3.fromHex(color["Color"]) or color["Color"]
+                    else
+                        return
+                    end
+                end
+
+                if typeof(color) ~= "Color3" then
+                    color = nil
                 end
 
                 if color then 
@@ -3546,8 +3554,8 @@
             section:button({name = "Save", callback = function() local cfgName = flags["config_name_text"] or flags["config_name_list"] or "default"; writefile(library.directory .. "/configs/" .. cfgName .. ".cfg", library:get_config()); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Saved config to:\n" .. cfgName}) end})
             section:button({name = "Load", callback = function() local cfgName = flags["config_name_list"] or "default"; local ok, err = pcall(function() library:load_config(readfile(library.directory .. "/configs/" .. cfgName .. ".cfg")) end); if ok then library:update_config_list(); notifications:create_notification({name = "Configs", info = "Loaded config:\n" .. cfgName}) else notifications:create_notification({name = "Configs", info = "Failed to load: " .. cfgName}) end end})
             section:button({name = "Delete", callback = function() local cfgName = flags["config_name_list"] or "default"; pcall(function() delfile(library.directory .. "/configs/" .. cfgName .. ".cfg") end); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. cfgName}) end})
-            section:colorpicker({name = "Menu Accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
-            section:keybind({name = "Menu Bind", key = Enum.KeyCode.End, callback = function(bool) window.toggle_menu(bool) end, default = true})
+            section:colorpicker({name = "Menu Accent", flag = "menu_accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
+            section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function(bool) window.toggle_menu(bool) end, default = true})
         end
     --
 
