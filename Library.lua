@@ -298,7 +298,7 @@
             local start 
 
             frame.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if input.UserInputType == Enum.UserInputType.MouseButton1 and not library._drag_locked then
                     dragging = true
                     start = input.Position
                     start_size = frame.Position
@@ -1441,14 +1441,13 @@
         end  
 
         function library:toggle(options) 
-            local rand = math.random(1, 2) 
             local cfg = {
                 enabled = options.enabled or nil,
                 name = options.name or "Toggle",
                 info = options.info or nil,
                 flag = options.flag or library:next_flag(),
                 
-                type = options.type and string.lower(options.type) or rand == 1 and "toggle" or "checkbox"; -- "toggle", "checkbox"
+                type = options.type and string.lower(options.type) or "toggle"; -- "toggle", "checkbox"
 
                 default = options.default or false,
                 folding = options.folding or false, 
@@ -3957,7 +3956,8 @@
                     Parent = row,
                     Name = "\0",
                     AnchorPoint = vec2(0, 0.5),
-                    Size = dim2(0, 20, 0, ROW_H),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = dim2(0, 20, 0, 0),
                     Position = dim2(0, 28, 0.5, 0),
                     BackgroundTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -3972,7 +3972,8 @@
                     Parent = row,
                     Name = "\0",
                     AnchorPoint = vec2(0, 0.5),
-                    Size = dim2(1, -56, 0, ROW_H),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = dim2(1, -56, 0, 0),
                     Position = dim2(0, 50, 0.5, 0),
                     BackgroundTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -4003,6 +4004,7 @@
 
                 row.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 and not rl_cfg._dragging then
+                        library._drag_locked = true
                         rl_cfg._dragging = key
                         rl_cfg._drag_offset = input.Position.Y - row.AbsolutePosition.Y
                         rl_cfg._hover_index = table.find(rl_cfg.order, key) or 1
@@ -4052,6 +4054,7 @@
 
             library:connection(uis.InputEnded, function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and rl_cfg._dragging then
+                    library._drag_locked = false
                     local key = rl_cfg._dragging
                     local hover_idx = rl_cfg._hover_index
                     local rm = rl_cfg.row_map[key]
