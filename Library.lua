@@ -3717,6 +3717,290 @@
         end
     --
 
+    -- Reorderable list
+        function library:reorderable_list(options)
+            local rl_cfg = {
+                name = options.name or "Order",
+                items_data = options.items or {},
+                flag_prefix = options.flag_prefix or "ro_",
+                callback = options.callback or function() end,
+                order = {},
+                row_map = {},
+            }
+
+            for i, item in rl_cfg.items_data do
+                rl_cfg.order[i] = item.key or item.name or item
+            end
+
+            local rl_items = {}
+
+            rl_items["outline"] = library:create("Frame", {
+                Name = "\0",
+                Parent = self.items["column"],
+                BorderColor3 = rgb(0, 0, 0),
+                Size = dim2(1, 0, 0, 35 + #rl_cfg.order * 34 + 8),
+                BorderSizePixel = 0,
+                BackgroundColor3 = rgb(25, 25, 29),
+            })
+
+            library:create("UICorner", {
+                Parent = rl_items["outline"],
+                CornerRadius = dim(0, 7),
+            })
+
+            rl_items["inline"] = library:create("Frame", {
+                Parent = rl_items["outline"],
+                Name = "\0",
+                Position = dim2(0, 1, 0, 1),
+                BorderColor3 = rgb(0, 0, 0),
+                Size = dim2(1, -2, 1, -2),
+                BorderSizePixel = 0,
+                BackgroundColor3 = rgb(22, 22, 24),
+            })
+
+            library:create("UICorner", {
+                Parent = rl_items["inline"],
+                CornerRadius = dim(0, 7),
+            })
+
+            rl_items["header"] = library:create("Frame", {
+                Parent = rl_items["inline"],
+                Name = "\0",
+                Size = dim2(1, 0, 0, 35),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+            })
+
+            rl_items["Icon"] = library:create("ImageLabel", {
+                ImageColor3 = themes.preset.accent,
+                BorderColor3 = rgb(0, 0, 0),
+                Parent = rl_items["header"],
+                AnchorPoint = vec2(0, 0.5),
+                Image = "http://www.roblox.com/asset/?id=6031090990",
+                BackgroundTransparency = 1,
+                Position = dim2(0, 10, 0.5, 0),
+                Name = "\0",
+                Size = dim2(0, 22, 0, 22),
+                BorderSizePixel = 0,
+                BackgroundColor3 = rgb(255, 255, 255),
+            })
+            library:apply_theme(rl_items["Icon"], "accent", "ImageColor3")
+
+            library:create("TextLabel", {
+                FontFace = fonts.font,
+                TextColor3 = rgb(255, 255, 255),
+                BorderColor3 = rgb(0, 0, 0),
+                Text = rl_cfg.name,
+                Parent = rl_items["header"],
+                Name = "\0",
+                Size = dim2(0, 0, 1, 0),
+                Position = dim2(0, 40, 0, -1),
+                BackgroundTransparency = 1,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                BorderSizePixel = 0,
+                AutomaticSize = Enum.AutomaticSize.X,
+                TextSize = 16,
+                BackgroundColor3 = rgb(255, 255, 255),
+            })
+
+            library:create("Frame", {
+                AnchorPoint = vec2(0, 1),
+                Parent = rl_items["header"],
+                Position = dim2(0, 0, 1, 0),
+                BorderColor3 = rgb(0, 0, 0),
+                Size = dim2(1, 0, 0, 1),
+                BorderSizePixel = 0,
+                BackgroundColor3 = rgb(36, 36, 37),
+            })
+
+            rl_items["list_frame"] = library:create("Frame", {
+                Parent = rl_items["inline"],
+                Name = "\0",
+                Position = dim2(0, 0, 0, 35),
+                Size = dim2(1, 0, 1, -35),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                ClipsDescendants = true,
+            })
+
+            local function refresh_layout()
+                for i, key in rl_cfg.order do
+                    local rm = rl_cfg.row_map[key]
+                    if rm then
+                        rm.row.LayoutOrder = i
+                        rm.pos_label.Text = "#" .. i
+                        rm.up_btn.Visible = i > 1
+                        rm.down_btn.Visible = i < #rl_cfg.order
+                    end
+                end
+                local flag_name = rl_cfg.flag_prefix .. "order"
+                flags[flag_name] = table.concat(rl_cfg.order, ",")
+                rl_cfg.callback(rl_cfg.order)
+            end
+
+            local function swap(idx_a, idx_b)
+                local tmp = rl_cfg.order[idx_a]
+                rl_cfg.order[idx_a] = rl_cfg.order[idx_b]
+                rl_cfg.order[idx_b] = tmp
+                refresh_layout()
+            end
+
+            for i, item_data in rl_cfg.items_data do
+                local key = item_data.key or item_data.name or item_data
+                local display = item_data.display or item_data.name or key
+
+                local row = library:create("Frame", {
+                    Parent = rl_items["list_frame"],
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = dim2(1, 0, 0, 34),
+                    BorderSizePixel = 0,
+                    LayoutOrder = i,
+                })
+
+                local pos_label = library:create("TextLabel", {
+                    FontFace = fonts.small,
+                    TextColor3 = themes.preset.accent,
+                    Text = "#" .. i,
+                    Parent = row,
+                    Name = "\0",
+                    Size = dim2(0, 24, 1, 0),
+                    Position = dim2(0, 10, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextSize = 13,
+                })
+                library:apply_theme(pos_label, "accent", "TextColor3")
+
+                library:create("TextLabel", {
+                    FontFace = fonts.small,
+                    TextColor3 = rgb(235, 235, 235),
+                    Text = display,
+                    Parent = row,
+                    Name = "\0",
+                    Size = dim2(1, -100, 1, 0),
+                    Position = dim2(0, 36, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
+                    TextSize = 14,
+                })
+
+                local btn_frame = library:create("Frame", {
+                    Parent = row,
+                    Name = "\0",
+                    AnchorPoint = vec2(1, 0.5),
+                    Position = dim2(1, -6, 0.5, 0),
+                    Size = dim2(0, 52, 0, 22),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                })
+
+                local up_btn = library:create("TextButton", {
+                    FontFace = fonts.small,
+                    Text = "\226\150\178",
+                    TextColor3 = rgb(200, 200, 200),
+                    TextSize = 14,
+                    AutoButtonColor = false,
+                    Parent = btn_frame,
+                    Name = "\0",
+                    Position = dim2(0, 0, 0, 0),
+                    Size = dim2(0, 24, 1, 0),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = rgb(33, 33, 35),
+                })
+                library:create("UICorner", { Parent = up_btn, CornerRadius = dim(0, 4) })
+
+                local down_btn = library:create("TextButton", {
+                    FontFace = fonts.small,
+                    Text = "\226\150\188",
+                    TextColor3 = rgb(200, 200, 200),
+                    TextSize = 14,
+                    AutoButtonColor = false,
+                    Parent = btn_frame,
+                    Name = "\0",
+                    Position = dim2(0, 28, 0, 0),
+                    Size = dim2(0, 24, 1, 0),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = rgb(33, 33, 35),
+                })
+                library:create("UICorner", { Parent = down_btn, CornerRadius = dim(0, 4) })
+
+                library:create("Frame", {
+                    AnchorPoint = vec2(0, 1),
+                    Parent = row,
+                    Position = dim2(0, 8, 1, 0),
+                    Size = dim2(1, -16, 0, 1),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = rgb(36, 36, 37),
+                })
+
+                rl_cfg.row_map[key] = {
+                    row = row,
+                    pos_label = pos_label,
+                    up_btn = up_btn,
+                    down_btn = down_btn,
+                }
+
+                up_btn.MouseButton1Click:Connect(function()
+                    local idx = table.find(rl_cfg.order, key)
+                    if idx and idx > 1 then swap(idx, idx - 1) end
+                end)
+
+                down_btn.MouseButton1Click:Connect(function()
+                    local idx = table.find(rl_cfg.order, key)
+                    if idx and idx < #rl_cfg.order then swap(idx, idx + 1) end
+                end)
+
+                up_btn.MouseEnter:Connect(function() library:tween(up_btn, {BackgroundColor3 = rgb(44, 44, 46)}) end)
+                up_btn.MouseLeave:Connect(function() library:tween(up_btn, {BackgroundColor3 = rgb(33, 33, 35)}) end)
+                down_btn.MouseEnter:Connect(function() library:tween(down_btn, {BackgroundColor3 = rgb(44, 44, 46)}) end)
+                down_btn.MouseLeave:Connect(function() library:tween(down_btn, {BackgroundColor3 = rgb(33, 33, 35)}) end)
+            end
+
+            library:create("UIListLayout", {
+                Parent = rl_items["list_frame"],
+                Padding = dim(0, 0),
+                SortOrder = Enum.SortOrder.LayoutOrder,
+            })
+
+            library:create("UIPadding", {
+                PaddingTop = dim(0, 4),
+                PaddingBottom = dim(0, 4),
+                Parent = rl_items["list_frame"],
+            })
+
+            refresh_layout()
+
+            local flag_name = rl_cfg.flag_prefix .. "order"
+            config_flags[flag_name] = function(v)
+                if type(v) == "string" then
+                    local parts = {}
+                    for part in string.gmatch(v, "[^,]+") do
+                        parts[#parts + 1] = part
+                    end
+                    if #parts == #rl_cfg.order then
+                        rl_cfg.order = parts
+                        refresh_layout()
+                    end
+                end
+            end
+
+            function rl_cfg.get_order()
+                return rl_cfg.order
+            end
+
+            function rl_cfg.set_order(new_order)
+                if type(new_order) == "table" and #new_order == #rl_cfg.order then
+                    rl_cfg.order = new_order
+                    refresh_layout()
+                end
+            end
+
+            return setmetatable(rl_cfg, library)
+        end
+    --
+
     -- Searchable toggle list
         function library:searchable_toggle_list(options)
             local cfg = {
