@@ -3922,7 +3922,6 @@
                     Thickness = 1.5,
                     Transparency = 1,
                 })
-                library:apply_theme(stroke, "accent", "Color")
 
                 local grip = library:create("Frame", {
                     Parent = row,
