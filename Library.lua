@@ -3719,6 +3719,8 @@
 
     -- Reorderable list
         function library:reorderable_list(options)
+            local ROW_H = 36
+            local LIST_PAD = 4
             local rl_cfg = {
                 name = options.name or "Order",
                 items_data = options.items or {},
@@ -3726,6 +3728,9 @@
                 callback = options.callback or function() end,
                 order = {},
                 row_map = {},
+                _dragging = nil,
+                _drag_offset = 0,
+                _hover_index = nil,
             }
 
             for i, item in rl_cfg.items_data do
@@ -3738,7 +3743,7 @@
                 Name = "\0",
                 Parent = self.items["column"],
                 BorderColor3 = rgb(0, 0, 0),
-                Size = dim2(1, 0, 0, 35 + #rl_cfg.order * 34 + 8),
+                Size = dim2(1, 0, 0, 35 + #rl_cfg.order * ROW_H + LIST_PAD * 2),
                 BorderSizePixel = 0,
                 BackgroundColor3 = rgb(25, 25, 29),
             })
@@ -3823,14 +3828,36 @@
                 ClipsDescendants = true,
             })
 
-            local function refresh_layout()
-                for i, key in rl_cfg.order do
+            local indicator_line = library:create("Frame", {
+                Parent = rl_items["list_frame"],
+                Name = "\0",
+                Size = dim2(1, -20, 0, 2),
+                Position = dim2(0, 10, 0, 0),
+                BackgroundColor3 = themes.preset.accent,
+                BorderSizePixel = 0,
+                ZIndex = 55,
+                Visible = false,
+            })
+            library:create("UICorner", { Parent = indicator_line, CornerRadius = dim(0, 1) })
+            library:apply_theme(indicator_line, "accent", "BackgroundColor3")
+
+            local function get_row_y(idx)
+                return LIST_PAD + (idx - 1) * ROW_H
+            end
+
+            local function refresh_positions(skip_key, animate)
+                for i, key in ipairs(rl_cfg.order) do
                     local rm = rl_cfg.row_map[key]
                     if rm then
-                        rm.row.LayoutOrder = i
                         rm.pos_label.Text = "#" .. i
-                        rm.up_btn.Visible = i > 1
-                        rm.down_btn.Visible = i < #rl_cfg.order
+                        if key ~= skip_key then
+                            local target = dim2(0, 0, 0, get_row_y(i))
+                            if animate then
+                                library:tween(rm.row, {Position = target}, Enum.EasingStyle.Quint, 0.18)
+                            else
+                                rm.row.Position = target
+                            end
+                        end
                     end
                 end
                 local flag_name = rl_cfg.flag_prefix .. "order"
@@ -3838,14 +3865,34 @@
                 rl_cfg.callback(rl_cfg.order)
             end
 
-            local function swap(idx_a, idx_b)
-                local tmp = rl_cfg.order[idx_a]
-                rl_cfg.order[idx_a] = rl_cfg.order[idx_b]
-                rl_cfg.order[idx_b] = tmp
-                refresh_layout()
+            local function calc_visual_positions(drag_key, hover_idx)
+                local slot = 0
+                for i, key in ipairs(rl_cfg.order) do
+                    if key ~= drag_key then
+                        slot = slot + 1
+                        local vi = slot
+                        if slot >= hover_idx then vi = vi + 1 end
+                        local rm = rl_cfg.row_map[key]
+                        if rm then
+                            library:tween(rm.row, {Position = dim2(0, 0, 0, get_row_y(vi))}, Enum.EasingStyle.Quint, 0.15)
+                        end
+                    end
+                end
+                indicator_line.Visible = true
+                indicator_line.Position = dim2(0, 10, 0, get_row_y(hover_idx) - 2)
             end
 
-            for i, item_data in rl_cfg.items_data do
+            local function set_row_zindex(rm, z)
+                rm.row.ZIndex = z
+                rm.row_bg.ZIndex = z
+                rm.pos_label.ZIndex = z + 1
+                rm.name_label.ZIndex = z + 1
+                rm.grip.ZIndex = z + 1
+                rm.sep_line.ZIndex = z
+                for _, dot in ipairs(rm.dots) do dot.ZIndex = z + 1 end
+            end
+
+            for i, item_data in ipairs(rl_cfg.items_data) do
                 local key = item_data.key or item_data.name or item_data
                 local display = item_data.display or item_data.name or key
 
@@ -3853,10 +3900,53 @@
                     Parent = rl_items["list_frame"],
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = dim2(1, 0, 0, 34),
+                    Size = dim2(1, 0, 0, ROW_H),
+                    Position = dim2(0, 0, 0, get_row_y(i)),
                     BorderSizePixel = 0,
-                    LayoutOrder = i,
                 })
+
+                local row_bg = library:create("Frame", {
+                    Parent = row,
+                    Name = "\0",
+                    Size = dim2(1, -8, 1, -4),
+                    Position = dim2(0, 4, 0, 2),
+                    BackgroundColor3 = rgb(30, 30, 35),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                })
+                library:create("UICorner", { Parent = row_bg, CornerRadius = dim(0, 5) })
+
+                local stroke = library:create("UIStroke", {
+                    Parent = row_bg,
+                    Color = themes.preset.accent,
+                    Thickness = 1.5,
+                    Transparency = 1,
+                })
+                library:apply_theme(stroke, "accent", "Color")
+
+                local grip = library:create("Frame", {
+                    Parent = row,
+                    Name = "\0",
+                    Size = dim2(0, 12, 0, 20),
+                    Position = dim2(0, 10, 0.5, -10),
+                    BackgroundTransparency = 1,
+                })
+
+                local dots = {}
+                for dc = 0, 1 do
+                    for dr = 0, 2 do
+                        local dot = library:create("Frame", {
+                            Parent = grip,
+                            Name = "\0",
+                            Size = dim2(0, 3, 0, 3),
+                            Position = dim2(0, dc * 7, 0, dr * 7),
+                            BackgroundColor3 = rgb(70, 70, 75),
+                            BorderSizePixel = 0,
+                        })
+                        library:create("UICorner", { Parent = dot, CornerRadius = dim(0, 2) })
+                        dots[#dots + 1] = dot
+                    end
+                end
 
                 local pos_label = library:create("TextLabel", {
                     FontFace = fonts.small,
@@ -3864,71 +3954,32 @@
                     Text = "#" .. i,
                     Parent = row,
                     Name = "\0",
-                    Size = dim2(0, 24, 1, 0),
-                    Position = dim2(0, 10, 0, 0),
+                    Size = dim2(0, 20, 1, 0),
+                    Position = dim2(0, 28, 0, 0),
                     BackgroundTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextSize = 13,
                 })
                 library:apply_theme(pos_label, "accent", "TextColor3")
 
-                library:create("TextLabel", {
+                local name_label = library:create("TextLabel", {
                     FontFace = fonts.small,
                     TextColor3 = rgb(235, 235, 235),
                     Text = display,
                     Parent = row,
                     Name = "\0",
-                    Size = dim2(1, -100, 1, 0),
-                    Position = dim2(0, 36, 0, 0),
+                    Size = dim2(1, -56, 1, 0),
+                    Position = dim2(0, 50, 0, 0),
                     BackgroundTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextTruncate = Enum.TextTruncate.AtEnd,
                     TextSize = 14,
                 })
 
-                local btn_frame = library:create("Frame", {
-                    Parent = row,
-                    Name = "\0",
-                    AnchorPoint = vec2(1, 0.5),
-                    Position = dim2(1, -6, 0.5, 0),
-                    Size = dim2(0, 52, 0, 22),
-                    BackgroundTransparency = 1,
-                    BorderSizePixel = 0,
-                })
-
-                local up_btn = library:create("TextButton", {
-                    FontFace = fonts.small,
-                    Text = "\226\150\178",
-                    TextColor3 = rgb(200, 200, 200),
-                    TextSize = 14,
-                    AutoButtonColor = false,
-                    Parent = btn_frame,
-                    Name = "\0",
-                    Position = dim2(0, 0, 0, 0),
-                    Size = dim2(0, 24, 1, 0),
-                    BorderSizePixel = 0,
-                    BackgroundColor3 = rgb(33, 33, 35),
-                })
-                library:create("UICorner", { Parent = up_btn, CornerRadius = dim(0, 4) })
-
-                local down_btn = library:create("TextButton", {
-                    FontFace = fonts.small,
-                    Text = "\226\150\188",
-                    TextColor3 = rgb(200, 200, 200),
-                    TextSize = 14,
-                    AutoButtonColor = false,
-                    Parent = btn_frame,
-                    Name = "\0",
-                    Position = dim2(0, 28, 0, 0),
-                    Size = dim2(0, 24, 1, 0),
-                    BorderSizePixel = 0,
-                    BackgroundColor3 = rgb(33, 33, 35),
-                })
-                library:create("UICorner", { Parent = down_btn, CornerRadius = dim(0, 4) })
-
-                library:create("Frame", {
+                local sep_line = library:create("Frame", {
                     AnchorPoint = vec2(0, 1),
                     Parent = row,
+                    Name = "\0",
                     Position = dim2(0, 8, 1, 0),
                     Size = dim2(1, -16, 0, 1),
                     BorderSizePixel = 0,
@@ -3937,40 +3988,90 @@
 
                 rl_cfg.row_map[key] = {
                     row = row,
+                    row_bg = row_bg,
+                    stroke = stroke,
+                    grip = grip,
+                    dots = dots,
                     pos_label = pos_label,
-                    up_btn = up_btn,
-                    down_btn = down_btn,
+                    name_label = name_label,
+                    sep_line = sep_line,
                 }
 
-                up_btn.MouseButton1Click:Connect(function()
-                    local idx = table.find(rl_cfg.order, key)
-                    if idx and idx > 1 then swap(idx, idx - 1) end
+                row.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 and not rl_cfg._dragging then
+                        rl_cfg._dragging = key
+                        rl_cfg._drag_offset = input.Position.Y - row.AbsolutePosition.Y
+                        rl_cfg._hover_index = table.find(rl_cfg.order, key) or 1
+                        set_row_zindex(rl_cfg.row_map[key], 50)
+                        library:tween(row_bg, {BackgroundTransparency = 0}, nil, 0.1)
+                        library:tween(stroke, {Transparency = 0}, nil, 0.1)
+                        for _, d in ipairs(dots) do
+                            library:tween(d, {BackgroundColor3 = rgb(120, 120, 130)}, nil, 0.1)
+                        end
+                    end
                 end)
 
-                down_btn.MouseButton1Click:Connect(function()
-                    local idx = table.find(rl_cfg.order, key)
-                    if idx and idx < #rl_cfg.order then swap(idx, idx + 1) end
+                row.MouseEnter:Connect(function()
+                    if not rl_cfg._dragging then
+                        for _, d in ipairs(dots) do
+                            library:tween(d, {BackgroundColor3 = rgb(100, 100, 110)}, nil, 0.15)
+                        end
+                    end
                 end)
 
-                up_btn.MouseEnter:Connect(function() library:tween(up_btn, {BackgroundColor3 = rgb(44, 44, 46)}) end)
-                up_btn.MouseLeave:Connect(function() library:tween(up_btn, {BackgroundColor3 = rgb(33, 33, 35)}) end)
-                down_btn.MouseEnter:Connect(function() library:tween(down_btn, {BackgroundColor3 = rgb(44, 44, 46)}) end)
-                down_btn.MouseLeave:Connect(function() library:tween(down_btn, {BackgroundColor3 = rgb(33, 33, 35)}) end)
+                row.MouseLeave:Connect(function()
+                    if not rl_cfg._dragging or rl_cfg._dragging ~= key then
+                        for _, d in ipairs(dots) do
+                            library:tween(d, {BackgroundColor3 = rgb(70, 70, 75)}, nil, 0.15)
+                        end
+                    end
+                end)
             end
 
-            library:create("UIListLayout", {
-                Parent = rl_items["list_frame"],
-                Padding = dim(0, 0),
-                SortOrder = Enum.SortOrder.LayoutOrder,
-            })
+            library:connection(uis.InputChanged, function(input)
+                if rl_cfg._dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local rm = rl_cfg.row_map[rl_cfg._dragging]
+                    if rm then
+                        local list_abs_y = rl_items["list_frame"].AbsolutePosition.Y
+                        local rel_y = input.Position.Y - list_abs_y - rl_cfg._drag_offset
+                        rm.row.Position = dim2(0, 0, 0, rel_y)
+                        local center_y = rel_y + ROW_H / 2
+                        local raw_idx = math.floor((center_y - LIST_PAD) / ROW_H) + 1
+                        local hover_idx = math.clamp(raw_idx, 1, #rl_cfg.order)
+                        if hover_idx ~= rl_cfg._hover_index then
+                            rl_cfg._hover_index = hover_idx
+                            calc_visual_positions(rl_cfg._dragging, hover_idx)
+                        end
+                    end
+                end
+            end)
 
-            library:create("UIPadding", {
-                PaddingTop = dim(0, 4),
-                PaddingBottom = dim(0, 4),
-                Parent = rl_items["list_frame"],
-            })
+            library:connection(uis.InputEnded, function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 and rl_cfg._dragging then
+                    local key = rl_cfg._dragging
+                    local hover_idx = rl_cfg._hover_index
+                    local rm = rl_cfg.row_map[key]
+                    rl_cfg._dragging = nil
+                    rl_cfg._hover_index = nil
+                    indicator_line.Visible = false
+                    if rm then
+                        set_row_zindex(rm, 1)
+                        library:tween(rm.row_bg, {BackgroundTransparency = 1}, nil, 0.15)
+                        library:tween(rm.stroke, {Transparency = 1}, nil, 0.15)
+                        for _, d in ipairs(rm.dots) do
+                            library:tween(d, {BackgroundColor3 = rgb(70, 70, 75)}, nil, 0.15)
+                        end
+                    end
+                    local old_idx = table.find(rl_cfg.order, key)
+                    if old_idx and hover_idx and old_idx ~= hover_idx then
+                        table.remove(rl_cfg.order, old_idx)
+                        table.insert(rl_cfg.order, math.clamp(hover_idx, 1, #rl_cfg.order + 1), key)
+                    end
+                    refresh_positions(nil, true)
+                end
+            end)
 
-            refresh_layout()
+            refresh_positions(nil, false)
 
             local flag_name = rl_cfg.flag_prefix .. "order"
             config_flags[flag_name] = function(v)
@@ -3981,7 +4082,7 @@
                     end
                     if #parts == #rl_cfg.order then
                         rl_cfg.order = parts
-                        refresh_layout()
+                        refresh_positions(nil, false)
                     end
                 end
             end
@@ -3993,7 +4094,7 @@
             function rl_cfg.set_order(new_order)
                 if type(new_order) == "table" and #new_order == #rl_cfg.order then
                     rl_cfg.order = new_order
-                    refresh_layout()
+                    refresh_positions(nil, false)
                 end
             end
 
