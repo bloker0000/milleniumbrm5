@@ -3896,9 +3896,12 @@
                 local key = item_data.key or item_data.name or item_data
                 local display = item_data.display or item_data.name or key
 
-                local row = library:create("Frame", {
+                local row = library:create("TextButton", {
                     Parent = rl_items["list_frame"],
                     Name = "\0",
+                    Text = "",
+                    AutoButtonColor = false,
+                    Active = true,
                     BackgroundTransparency = 1,
                     Size = dim2(1, 0, 0, ROW_H),
                     Position = dim2(0, 0, 0, get_row_y(i)),
@@ -3953,8 +3956,9 @@
                     Text = "#" .. i,
                     Parent = row,
                     Name = "\0",
-                    Size = dim2(0, 20, 1, 0),
-                    Position = dim2(0, 28, 0, 0),
+                    AnchorPoint = vec2(0, 0.5),
+                    Size = dim2(0, 20, 0, ROW_H),
+                    Position = dim2(0, 28, 0.5, 0),
                     BackgroundTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextSize = 13,
@@ -3967,8 +3971,9 @@
                     Text = display,
                     Parent = row,
                     Name = "\0",
-                    Size = dim2(1, -56, 1, 0),
-                    Position = dim2(0, 50, 0, 0),
+                    AnchorPoint = vec2(0, 0.5),
+                    Size = dim2(1, -56, 0, ROW_H),
+                    Position = dim2(0, 50, 0.5, 0),
                     BackgroundTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextTruncate = Enum.TextTruncate.AtEnd,
