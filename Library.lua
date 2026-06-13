@@ -840,11 +840,12 @@
             local active_only = string.lower(mode) == "active" or string.lower(mode) == "enabled"
             local rows = {}
 
-            for _, flag in list.order do
+            for source_index, flag in list.order do
                 local entry = list.entries[flag]
                 local cfg = entry and entry.cfg
 
                 if cfg and not cfg.ignore_key then
+                    entry.order = entry.order or source_index
                     local has_key = library:_keybind_list_has_key(cfg.key)
 
                     if (has_key or options.show_unbound == true) and (not active_only or cfg.active == true) then
@@ -852,6 +853,17 @@
                     end
                 end
             end
+
+            table.sort(rows, function(a, b)
+                local a_active = a.cfg and a.cfg.active == true
+                local b_active = b.cfg and b.cfg.active == true
+
+                if a_active ~= b_active then
+                    return a_active
+                end
+
+                return (a.order or 0) < (b.order or 0)
+            end)
 
             items["mode"].Text = active_only and "ACTIVE" or "ALL"
 
@@ -874,6 +886,13 @@
                 for index, entry in rows do
                     local cfg = entry.cfg
                     local active = cfg.active == true
+                    local key_text = library:_keybind_list_key_text(cfg.key)
+                    local key_width = clamp((#key_text * 6) + 12, 26, 54)
+                    local mode_width = 40
+                    local key_gap = 6
+                    local right_padding = 8
+                    local name_mode_gap = 5
+                    local name_right = 15 + name_mode_gap + mode_width + key_gap + key_width + right_padding
                     local row = library:create("Frame", {
                         Parent = items["rows"];
                         Name = "\0";
@@ -933,8 +952,10 @@
                         BackgroundTransparency = 1;
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
-                        Position = dim2(0, 15, 0, 0);
-                        Size = dim2(1, -128, 1, 0);
+                        AnchorPoint = vec2(0, 0.5);
+                        Position = dim2(0, 15, 0.5, 0);
+                        Size = dim2(1, -name_right, 0, 18);
+                        TextYAlignment = Enum.TextYAlignment.Center;
                         BackgroundColor3 = rgb(255, 255, 255);
                     })
 
@@ -950,8 +971,10 @@
                         BackgroundTransparency = 1;
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
-                        Position = dim2(1, -116, 0, 0);
-                        Size = dim2(0, 48, 1, 0);
+                        AnchorPoint = vec2(1, 0.5);
+                        Position = dim2(1, -(right_padding + key_width + key_gap), 0.5, 0);
+                        Size = dim2(0, mode_width, 0, 16);
+                        TextYAlignment = Enum.TextYAlignment.Center;
                         BackgroundColor3 = rgb(255, 255, 255);
                     })
 
@@ -959,8 +982,8 @@
                         Parent = bg;
                         Name = "\0";
                         AnchorPoint = vec2(1, 0.5);
-                        Position = dim2(1, -8, 0.5, 0);
-                        Size = dim2(0, 58, 0, 16);
+                        Position = dim2(1, -right_padding, 0.5, 0);
+                        Size = dim2(0, key_width, 0, 15);
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
                         BackgroundColor3 = active and rgb(43, 43, 46) or rgb(33, 33, 35);
@@ -975,15 +998,17 @@
                         Parent = key_holder;
                         Name = "\0";
                         FontFace = fonts.font;
-                        Text = library:_keybind_list_key_text(cfg.key);
+                        Text = key_text;
                         TextColor3 = active and themes.preset.accent or rgb(140, 140, 144);
-                        TextSize = 11;
+                        TextSize = 10;
                         TextTruncate = Enum.TextTruncate.AtEnd;
+                        TextXAlignment = Enum.TextXAlignment.Center;
+                        TextYAlignment = Enum.TextYAlignment.Center;
                         BackgroundTransparency = 1;
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
                         Size = dim2(1, -6, 1, 0);
-                        Position = dim2(0, 3, 0, 0);
+                        Position = dim2(0, 3, 0, -1);
                         BackgroundColor3 = rgb(255, 255, 255);
                     })
                 end
