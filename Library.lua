@@ -1059,22 +1059,33 @@
             local list = library:_ensure_keybind_list()
             local opts = list.options
             options = options or {}
+            local lock_false = library._keybind_list_lock_defaults == true and library._keybind_list_user_change ~= true
 
             if options.enabled ~= nil then
-                opts.enabled = options.enabled == true
+                if not (lock_false and options.enabled == false) then
+                    opts.enabled = options.enabled == true
+                end
             end
             if options.mode then
                 opts.mode = options.mode
             end
             if options.show_unbound ~= nil then
-                opts.show_unbound = options.show_unbound == true
+                if not (lock_false and options.show_unbound == false) then
+                    opts.show_unbound = options.show_unbound == true
+                end
             elseif options.showUnbound ~= nil then
-                opts.show_unbound = options.showUnbound == true
+                if not (lock_false and options.showUnbound == false) then
+                    opts.show_unbound = options.showUnbound == true
+                end
             end
             if options.auto_height ~= nil then
-                opts.auto_height = options.auto_height == true
+                if not (lock_false and options.auto_height == false) then
+                    opts.auto_height = options.auto_height == true
+                end
             elseif options.autoHeight ~= nil then
-                opts.auto_height = options.autoHeight == true
+                if not (lock_false and options.autoHeight == false) then
+                    opts.auto_height = options.autoHeight == true
+                end
             end
             if options.width then
                 opts.width = clamp(tonumber(options.width) or opts.width, 160, 420)
@@ -4194,13 +4205,40 @@
 
             local column = menu:column({})
             local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
-            local keybind_list_enabled = section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = true, callback = function(bool) library:keybind_list({enabled = bool}) end})
-            section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "Active"), callback = function(value) library:keybind_list({mode = value}) end})
-            local keybind_list_show_unbound = section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = true, callback = function(bool) library:keybind_list({show_unbound = bool}) end})
-            local keybind_list_auto_height = section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = true, callback = function(bool) library:keybind_list({auto_height = bool}) end})
+            library._keybind_list_lock_defaults = true
+            local function update_keybind_list_from_control(options)
+                local previous_user_change = library._keybind_list_user_change
+                if not library._keybind_list_forcing_defaults then
+                    library._keybind_list_user_change = true
+                end
+                library:keybind_list(options)
+                library._keybind_list_user_change = previous_user_change
+            end
+            local keybind_list_enabled = section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = true, callback = function(bool) update_keybind_list_from_control({enabled = bool}) end})
+            section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "Active"), callback = function(value) update_keybind_list_from_control({mode = value}) end})
+            local keybind_list_show_unbound = section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = true, callback = function(bool) update_keybind_list_from_control({show_unbound = bool}) end})
+            local keybind_list_auto_height = section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = true, callback = function(bool) update_keybind_list_from_control({auto_height = bool}) end})
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
             section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 250), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
+            local function guard_keybind_list_setter(flag, control)
+                local raw_set = control and control.set
+                if type(raw_set) ~= "function" then
+                    return
+                end
+                config_flags[flag] = function(value)
+                    if value == false and library._keybind_list_lock_defaults == true and library._keybind_list_user_change ~= true then
+                        raw_set(true)
+                    else
+                        raw_set(value)
+                    end
+                end
+            end
+            guard_keybind_list_setter("keybind_list_enabled", keybind_list_enabled)
+            guard_keybind_list_setter("keybind_list_show_unbound", keybind_list_show_unbound)
+            guard_keybind_list_setter("keybind_list_auto_height", keybind_list_auto_height)
             local function force_keybind_list_defaults()
+                local previous_forcing = library._keybind_list_forcing_defaults
+                library._keybind_list_forcing_defaults = true
                 if keybind_list_enabled and keybind_list_enabled.set then
                     keybind_list_enabled.set(true)
                 end
@@ -4218,10 +4256,12 @@
                     width = library:_keybind_list_option("width", 215),
                     height = library:_keybind_list_option("max_height", 250),
                 })
+                library._keybind_list_forcing_defaults = previous_forcing
             end
             force_keybind_list_defaults()
             task.defer(force_keybind_list_defaults)
             task.delay(0.5, force_keybind_list_defaults)
+            task.delay(2, force_keybind_list_defaults)
         end
     --
 
