@@ -445,6 +445,10 @@
             end 
 
             themes.preset[theme] = color 
+
+            if library._refresh_keybind_list then
+                library:_refresh_keybind_list()
+            end
         end 
 
         function library:connection(signal, callback)
@@ -476,6 +480,502 @@
             end
             
             return ins 
+        end
+
+        function library:_keybind_list_option(name, fallback)
+            local list = library._keybind_list
+            local options = list and list.options
+
+            if options and options[name] ~= nil then
+                return options[name]
+            end
+
+            return fallback
+        end
+
+        function library:_keybind_list_has_key(key)
+            if not key or key == "NONE" then
+                return false
+            end
+
+            local key_string = tostring(key)
+            return key_string ~= "Enum.KeyCode.Unknown"
+                and key_string ~= "Enum.UserInputType.None"
+                and key_string ~= "Unknown"
+        end
+
+        function library:_keybind_list_key_text(key)
+            if not library:_keybind_list_has_key(key) then
+                return "NONE"
+            end
+
+            local text = keys[key] or tostring(key):gsub("Enum.", "")
+            return tostring(text):gsub("KeyCode.", ""):gsub("UserInputType.", "")
+        end
+
+        function library:_keybind_list_title_from_flag(flag)
+            local text = tostring(flag or "Keybind")
+                :gsub("_keybind$", "")
+                :gsub("_key$", "")
+                :gsub("_", " ")
+
+            return (text:gsub("(%a)([%w']*)", function(first, rest)
+                return string.upper(first) .. string.lower(rest)
+            end))
+        end
+
+        function library:_keybind_list_entry_name(entry)
+            local names = library._keybind_list_names
+            local cfg = entry and entry.cfg
+            local flag = cfg and cfg.flag
+            local mapped = names and flag and names[flag]
+
+            if mapped and mapped ~= "" then
+                return mapped
+            end
+
+            local name = entry and entry.name
+            if name and name ~= "" and name ~= "Toggle Key" and name ~= "Modifier Key" and name ~= "Keybind" then
+                return name
+            end
+
+            return library:_keybind_list_title_from_flag(flag)
+        end
+
+        function library:_ensure_keybind_list()
+            local list = library._keybind_list
+            if not list then
+                list = {
+                    entries = {},
+                    order = {},
+                    rows = {},
+                    options = {
+                        enabled = false,
+                        mode = "All",
+                        show_unbound = false,
+                        width = 230,
+                        max_height = 260,
+                        position = dim2(0, 20, 0.5, -130),
+                    },
+                    items = {},
+                }
+                library._keybind_list = list
+            end
+
+            list.entries = list.entries or {}
+            list.order = list.order or {}
+            list.rows = list.rows or {}
+            list.options = list.options or {}
+            list.items = list.items or {}
+
+            local options = list.options
+            if options.enabled == nil then
+                options.enabled = false
+            end
+            if not options.mode then
+                options.mode = "All"
+            end
+            if options.show_unbound == nil then
+                options.show_unbound = false
+            end
+            if not options.width then
+                options.width = 230
+            end
+            if not options.max_height then
+                options.max_height = 260
+            end
+            if not options.position then
+                options.position = dim2(0, 20, 0.5, -130)
+            end
+
+            return list
+        end
+
+        function library:_create_keybind_list()
+            local list = library:_ensure_keybind_list()
+            local items = list.items
+
+            if items["outline"] or not library["other"] then
+                return list
+            end
+
+            items["outline"] = library:create("Frame", {
+                Parent = library["other"];
+                Name = "\0";
+                Position = list.options.position;
+                Size = dim2(0, list.options.width, 0, 38);
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                BackgroundColor3 = rgb(25, 25, 29);
+                Visible = list.options.enabled == true;
+                ClipsDescendants = true;
+            })
+
+            library:create("UICorner", {
+                Parent = items["outline"];
+                CornerRadius = dim(0, 7);
+            })
+
+            library:create("UIStroke", {
+                Parent = items["outline"];
+                Color = rgb(23, 23, 29);
+                ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            })
+
+            items["inline"] = library:create("Frame", {
+                Parent = items["outline"];
+                Name = "\0";
+                Position = dim2(0, 1, 0, 1);
+                Size = dim2(1, -2, 1, -2);
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                BackgroundColor3 = rgb(22, 22, 24);
+            })
+
+            library:create("UICorner", {
+                Parent = items["inline"];
+                CornerRadius = dim(0, 7);
+            })
+
+            items["header"] = library:create("Frame", {
+                Parent = items["inline"];
+                Name = "\0";
+                Size = dim2(1, 0, 0, 32);
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                BackgroundTransparency = 1;
+                BackgroundColor3 = rgb(255, 255, 255);
+            })
+
+            items["title"] = library:create("TextLabel", {
+                Parent = items["header"];
+                Name = "\0";
+                FontFace = fonts.font;
+                Text = "Keybinds";
+                TextColor3 = rgb(245, 245, 245);
+                TextSize = 15;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                BackgroundTransparency = 1;
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                Position = dim2(0, 9, 0, 0);
+                Size = dim2(1, -72, 1, 0);
+                BackgroundColor3 = rgb(255, 255, 255);
+            })
+
+            items["mode"] = library:create("TextLabel", {
+                Parent = items["header"];
+                Name = "\0";
+                FontFace = fonts.font;
+                Text = "ALL";
+                TextColor3 = themes.preset.accent;
+                TextSize = 12;
+                TextXAlignment = Enum.TextXAlignment.Right;
+                BackgroundTransparency = 1;
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                Position = dim2(1, -58, 0, 0);
+                Size = dim2(0, 48, 1, 0);
+                BackgroundColor3 = rgb(255, 255, 255);
+            }); library:apply_theme(items["mode"], "accent", "TextColor3")
+
+            items["line"] = library:create("Frame", {
+                Parent = items["inline"];
+                Name = "\0";
+                Position = dim2(0, 9, 0, 31);
+                Size = dim2(1, -18, 0, 1);
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                BackgroundColor3 = rgb(32, 32, 35);
+            })
+
+            items["scroll"] = library:create("ScrollingFrame", {
+                Parent = items["inline"];
+                Name = "\0";
+                Position = dim2(0, 0, 0, 34);
+                Size = dim2(1, 0, 0, 0);
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                BackgroundTransparency = 1;
+                BackgroundColor3 = rgb(255, 255, 255);
+                ScrollBarThickness = 2;
+                ScrollBarImageColor3 = rgb(44, 44, 46);
+                CanvasSize = dim2(0, 0, 0, 0);
+                AutomaticCanvasSize = Enum.AutomaticSize.Y;
+                ScrollingDirection = Enum.ScrollingDirection.Y;
+                ClipsDescendants = true;
+            })
+
+            items["rows"] = library:create("Frame", {
+                Parent = items["scroll"];
+                Name = "\0";
+                Size = dim2(1, -8, 0, 0);
+                Position = dim2(0, 4, 0, 4);
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                BackgroundTransparency = 1;
+                AutomaticSize = Enum.AutomaticSize.Y;
+                BackgroundColor3 = rgb(255, 255, 255);
+            })
+
+            library:create("UIListLayout", {
+                Parent = items["rows"];
+                Padding = dim(0, 4);
+                SortOrder = Enum.SortOrder.LayoutOrder;
+            })
+
+            library:create("UIPadding", {
+                Parent = items["rows"];
+                PaddingBottom = dim(0, 4);
+            })
+
+            library:draggify(items["outline"])
+            return list
+        end
+
+        function library:_refresh_keybind_list()
+            local list = library:_ensure_keybind_list()
+            local items = list.items
+            local options = list.options
+
+            if not items["outline"] then
+                if not library["other"] then
+                    return
+                end
+
+                library:_create_keybind_list()
+                items = list.items
+            end
+
+            if library["other"] then
+                library["other"].Enabled = options.enabled == true
+            end
+
+            items["outline"].Visible = options.enabled == true
+            items["outline"].Size = dim2(0, options.width, 0, items["outline"].Size.Y.Offset)
+
+            for _, row in list.rows do
+                row:Destroy()
+            end
+            list.rows = {}
+
+            local mode = tostring(options.mode or "All")
+            local active_only = string.lower(mode) == "active" or string.lower(mode) == "enabled"
+            local rows = {}
+
+            for _, flag in list.order do
+                local entry = list.entries[flag]
+                local cfg = entry and entry.cfg
+
+                if cfg and not cfg.ignore_key then
+                    local has_key = library:_keybind_list_has_key(cfg.key)
+
+                    if (has_key or options.show_unbound == true) and (not active_only or cfg.active == true) then
+                        rows[#rows + 1] = entry
+                    end
+                end
+            end
+
+            items["mode"].Text = active_only and "ACTIVE" or "ALL"
+
+            if #rows == 0 then
+                local empty = library:create("TextLabel", {
+                    Parent = items["rows"];
+                    Name = "\0";
+                    FontFace = fonts.font;
+                    Text = "No keybinds";
+                    TextColor3 = rgb(86, 86, 87);
+                    TextSize = 13;
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    Size = dim2(1, 0, 0, 24);
+                    BackgroundColor3 = rgb(255, 255, 255);
+                })
+                list.rows[#list.rows + 1] = empty
+            else
+                for index, entry in rows do
+                    local cfg = entry.cfg
+                    local active = cfg.active == true
+                    local row = library:create("Frame", {
+                        Parent = items["rows"];
+                        Name = "\0";
+                        Size = dim2(1, 0, 0, 24);
+                        BackgroundTransparency = 1;
+                        BorderColor3 = rgb(0, 0, 0);
+                        BorderSizePixel = 0;
+                        BackgroundColor3 = rgb(255, 255, 255);
+                        LayoutOrder = index;
+                    })
+                    list.rows[#list.rows + 1] = row
+
+                    local bg = library:create("Frame", {
+                        Parent = row;
+                        Name = "\0";
+                        Size = dim2(1, 0, 1, 0);
+                        BorderColor3 = rgb(0, 0, 0);
+                        BorderSizePixel = 0;
+                        BackgroundColor3 = active and rgb(31, 31, 34) or rgb(27, 27, 30);
+                    })
+
+                    library:create("UICorner", {
+                        Parent = bg;
+                        CornerRadius = dim(0, 5);
+                    })
+
+                    local accent = library:create("Frame", {
+                        Parent = bg;
+                        Name = "\0";
+                        Position = dim2(0, 6, 0, 6);
+                        Size = dim2(0, 2, 1, -12);
+                        BorderColor3 = rgb(0, 0, 0);
+                        BorderSizePixel = 0;
+                        BackgroundColor3 = active and themes.preset.accent or rgb(58, 58, 62);
+                    })
+
+                    library:create("UICorner", {
+                        Parent = accent;
+                        CornerRadius = dim(0, 2);
+                    })
+
+                    local name = library:create("TextLabel", {
+                        Parent = bg;
+                        Name = "\0";
+                        FontFace = fonts.font;
+                        Text = library:_keybind_list_entry_name(entry);
+                        TextColor3 = active and rgb(245, 245, 245) or rgb(168, 168, 172);
+                        TextSize = 13;
+                        TextXAlignment = Enum.TextXAlignment.Left;
+                        TextTruncate = Enum.TextTruncate.AtEnd;
+                        BackgroundTransparency = 1;
+                        BorderColor3 = rgb(0, 0, 0);
+                        BorderSizePixel = 0;
+                        Position = dim2(0, 13, 0, 0);
+                        Size = dim2(1, -118, 1, 0);
+                        BackgroundColor3 = rgb(255, 255, 255);
+                    })
+
+                    local mode_text = library:create("TextLabel", {
+                        Parent = bg;
+                        Name = "\0";
+                        FontFace = fonts.font;
+                        Text = tostring(cfg.mode or "Toggle");
+                        TextColor3 = rgb(86, 86, 87);
+                        TextSize = 11;
+                        TextXAlignment = Enum.TextXAlignment.Right;
+                        TextTruncate = Enum.TextTruncate.AtEnd;
+                        BackgroundTransparency = 1;
+                        BorderColor3 = rgb(0, 0, 0);
+                        BorderSizePixel = 0;
+                        Position = dim2(1, -100, 0, 0);
+                        Size = dim2(0, 43, 1, 0);
+                        BackgroundColor3 = rgb(255, 255, 255);
+                    })
+
+                    local key_holder = library:create("Frame", {
+                        Parent = bg;
+                        Name = "\0";
+                        AnchorPoint = vec2(1, 0.5);
+                        Position = dim2(1, -7, 0.5, 0);
+                        Size = dim2(0, 48, 0, 16);
+                        BorderColor3 = rgb(0, 0, 0);
+                        BorderSizePixel = 0;
+                        BackgroundColor3 = active and rgb(43, 43, 46) or rgb(33, 33, 35);
+                    })
+
+                    library:create("UICorner", {
+                        Parent = key_holder;
+                        CornerRadius = dim(0, 4);
+                    })
+
+                    library:create("TextLabel", {
+                        Parent = key_holder;
+                        Name = "\0";
+                        FontFace = fonts.font;
+                        Text = library:_keybind_list_key_text(cfg.key);
+                        TextColor3 = active and themes.preset.accent or rgb(140, 140, 144);
+                        TextSize = 11;
+                        BackgroundTransparency = 1;
+                        BorderColor3 = rgb(0, 0, 0);
+                        BorderSizePixel = 0;
+                        Size = dim2(1, -6, 1, 0);
+                        Position = dim2(0, 3, 0, 0);
+                        BackgroundColor3 = rgb(255, 255, 255);
+                    })
+                end
+            end
+
+            local row_count = max(#rows, 1)
+            local content_height = 8 + (row_count * 28)
+            local scroll_height = min(content_height, options.max_height)
+            items["scroll"].Size = dim2(1, 0, 0, scroll_height)
+            items["outline"].Size = dim2(0, options.width, 0, 36 + scroll_height)
+        end
+
+        function library:_register_keybind(cfg)
+            if not cfg or not cfg.flag then
+                return
+            end
+
+            local list = library:_ensure_keybind_list()
+            local entry = list.entries[cfg.flag]
+
+            if not entry then
+                entry = { cfg = cfg, name = cfg.list_name or cfg.name }
+                list.entries[cfg.flag] = entry
+                list.order[#list.order + 1] = cfg.flag
+            else
+                entry.cfg = cfg
+                entry.name = cfg.list_name or cfg.name
+            end
+
+            library:_refresh_keybind_list()
+        end
+
+        function library:set_keybind_list_names(names)
+            library._keybind_list_names = names or {}
+            library:_refresh_keybind_list()
+        end
+
+        function library:keybind_list(options)
+            local list = library:_ensure_keybind_list()
+            local opts = list.options
+            options = options or {}
+
+            if options.enabled ~= nil then
+                opts.enabled = options.enabled == true
+            end
+            if options.mode then
+                opts.mode = options.mode
+            end
+            if options.show_unbound ~= nil then
+                opts.show_unbound = options.show_unbound == true
+            elseif options.showUnbound ~= nil then
+                opts.show_unbound = options.showUnbound == true
+            end
+            if options.width then
+                opts.width = clamp(tonumber(options.width) or opts.width, 160, 420)
+            end
+            if options.height then
+                opts.max_height = clamp(tonumber(options.height) or opts.max_height, 90, 520)
+            elseif options.max_height then
+                opts.max_height = clamp(tonumber(options.max_height) or opts.max_height, 90, 520)
+            elseif options.maxHeight then
+                opts.max_height = clamp(tonumber(options.maxHeight) or opts.max_height, 90, 520)
+            end
+            if options.position then
+                opts.position = options.position
+            elseif options.Position then
+                opts.position = options.Position
+            end
+            if (options.position or options.Position) and list.items and list.items["outline"] then
+                list.items["outline"].Position = opts.position
+            end
+
+            library:_create_keybind_list()
+            library:_refresh_keybind_list()
+
+            return list
         end
 
         function library:unload_menu() 
@@ -2931,7 +3431,8 @@
                 flag = options.flag or library:next_flag(),
                 callback = options.callback or function() end,
                 name = options.name or nil, 
-                ignore_key = options.ignore or false, 
+                list_name = options.list_name or options.listName or options.display_name or options.displayName,
+                ignore_key = options.ignore or options.ignore_key or options.ignoreKey or false,
 
                 key = options.key or nil, 
                 mode = options.mode or "Toggle",
@@ -3203,6 +3704,10 @@
                     key = cfg.key, 
                     active = cfg.active
                 }
+
+                if library._refresh_keybind_list then
+                    library:_refresh_keybind_list()
+                end
             end
 
             function cfg.set_visible(bool)
@@ -3262,6 +3767,7 @@
             cfg.set({mode = cfg.mode, active = cfg.active, key = cfg.key})           
             cfg._initializing = false
             config_flags[cfg.flag] = cfg.set
+            library:_register_keybind(cfg)
 
             return setmetatable(cfg, library)
         end
@@ -3554,6 +4060,11 @@
             section:button({name = "Load", callback = function() local cfgName = flags["config_name_list"] or "default"; local ok, err = pcall(function() library:load_config(readfile(library.directory .. "/configs/" .. cfgName .. ".cfg")) end); if ok then library:update_config_list(); notifications:create_notification({name = "Configs", info = "Loaded config:\n" .. cfgName}) else notifications:create_notification({name = "Configs", info = "Failed to load: " .. cfgName}) end end})
             section:button({name = "Delete", callback = function() local cfgName = flags["config_name_list"] or "default"; pcall(function() delfile(library.directory .. "/configs/" .. cfgName .. ".cfg") end); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. cfgName}) end})
             section:colorpicker({name = "Menu Accent", flag = "menu_accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
+            section:toggle({name = "Keybind List", flag = "keybind_list_enabled", default = library:_keybind_list_option("enabled", false), callback = function(bool) library:keybind_list({enabled = bool}) end})
+            section:dropdown({name = "Keybind List Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "All"), callback = function(value) library:keybind_list({mode = value}) end})
+            section:toggle({name = "Show Unbound Binds", flag = "keybind_list_show_unbound", default = library:_keybind_list_option("show_unbound", false), callback = function(bool) library:keybind_list({show_unbound = bool}) end})
+            section:slider({name = "Keybind List Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 230), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
+            section:slider({name = "Keybind List Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 260), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
             section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function(bool) window.toggle_menu(bool) end, default = true})
         end
     --
