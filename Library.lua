@@ -4047,7 +4047,7 @@
 
         function library:init_config(window) 
             window:seperator({name = "Settings"})
-            local main = window:tab({name = "Configs", tabs = {"Main"}})
+            local main, menu = window:tab({name = "Configs", tabs = {"Main", "Menu"}})
             
             local column = main:column({})
             local section = column:section({name = "Configs", size = 1, default = true, icon = "rbxassetid://139628202576511"})
@@ -4059,13 +4059,19 @@
             section:button({name = "Save", callback = function() local cfgName = flags["config_name_text"] or flags["config_name_list"] or "default"; writefile(library.directory .. "/configs/" .. cfgName .. ".cfg", library:get_config()); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Saved config to:\n" .. cfgName}) end})
             section:button({name = "Load", callback = function() local cfgName = flags["config_name_list"] or "default"; local ok, err = pcall(function() library:load_config(readfile(library.directory .. "/configs/" .. cfgName .. ".cfg")) end); if ok then library:update_config_list(); notifications:create_notification({name = "Configs", info = "Loaded config:\n" .. cfgName}) else notifications:create_notification({name = "Configs", info = "Failed to load: " .. cfgName}) end end})
             section:button({name = "Delete", callback = function() local cfgName = flags["config_name_list"] or "default"; pcall(function() delfile(library.directory .. "/configs/" .. cfgName .. ".cfg") end); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. cfgName}) end})
-            section:colorpicker({name = "Menu Accent", flag = "menu_accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
-            section:toggle({name = "Keybind List", flag = "keybind_list_enabled", default = library:_keybind_list_option("enabled", false), callback = function(bool) library:keybind_list({enabled = bool}) end})
-            section:dropdown({name = "Keybind List Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "All"), callback = function(value) library:keybind_list({mode = value}) end})
-            section:toggle({name = "Show Unbound Binds", flag = "keybind_list_show_unbound", default = library:_keybind_list_option("show_unbound", false), callback = function(bool) library:keybind_list({show_unbound = bool}) end})
-            section:slider({name = "Keybind List Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 230), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
-            section:slider({name = "Keybind List Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 260), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
+
+            local column = menu:column({})
+            local section = column:section({name = "Appearance", size = 1, default = true, icon = "rbxassetid://129380150574313"})
+            section:colorpicker({name = "Accent", flag = "menu_accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
             section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function(bool) window.toggle_menu(bool) end, default = true})
+
+            local column = menu:column({})
+            local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
+            section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = library:_keybind_list_option("enabled", false), callback = function(bool) library:keybind_list({enabled = bool}) end})
+            section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "All"), callback = function(value) library:keybind_list({mode = value}) end})
+            section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = library:_keybind_list_option("show_unbound", false), callback = function(bool) library:keybind_list({show_unbound = bool}) end})
+            section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 230), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
+            section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 260), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
         end
     --
 
