@@ -301,8 +301,9 @@
 
         function library:draggify(frame)
             local dragging = false 
-            local normalized = false
-            local drag_offset = vec2()
+            local start_position = frame.Position
+            local start_absolute = frame.AbsolutePosition
+            local start_mouse = vec2()
             local input_position = function(input)
                 local position = input.Position
                 return vec2(position.X, position.Y)
@@ -311,9 +312,9 @@
             frame.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and not library._drag_locked then
                     dragging = true
-                    normalized = false
-                    local absolute_position = frame.AbsolutePosition
-                    drag_offset = input_position(input) - absolute_position
+                    start_position = frame.Position
+                    start_absolute = frame.AbsolutePosition
+                    start_mouse = input_position(input)
                 end
             end)
 
@@ -330,26 +331,16 @@
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
                     local frame_size = frame.AbsoluteSize
+                    local delta = mouse_position - start_mouse
 
-                    if not normalized then
-                        normalized = true
-                        local absolute_position = frame.AbsolutePosition
-                        frame.Position = dim2(0, absolute_position.X, 0, absolute_position.Y)
-                    end
+                    local target_x = clamp(start_absolute.X + delta.X, 0, max(0, viewport_x - frame_size.X))
+                    local target_y = math.clamp(start_absolute.Y + delta.Y, 0, max(0, viewport_y - frame_size.Y))
 
                     local current_position = dim2(
-                        0,
-                        clamp(
-                            mouse_position.X - drag_offset.X,
-                            0,
-                            max(0, viewport_x - frame_size.X)
-                        ),
-                        0,
-                        math.clamp(
-                            mouse_position.Y - drag_offset.Y,
-                            0,
-                            max(0, viewport_y - frame_size.Y)
-                        )
+                        start_position.X.Scale,
+                        target_x - (start_position.X.Scale * viewport_x),
+                        start_position.Y.Scale,
+                        target_y - (start_position.Y.Scale * viewport_y)
                     )
 
                     library:tween(frame, {Position = current_position}, Enum.EasingStyle.Linear, 0.05)
