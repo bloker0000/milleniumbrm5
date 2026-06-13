@@ -302,19 +302,18 @@
         function library:draggify(frame)
             local dragging = false 
             local start_position = frame.Position
-            local start_absolute = frame.AbsolutePosition
-            local start_mouse = vec2()
-            local input_position = function(input)
-                local position = input.Position
-                return vec2(position.X, position.Y)
-            end
+            local start
+            local start_x = 0
+            local start_y = 0
 
             frame.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and not library._drag_locked then
                     dragging = true
+                    camera = ws.CurrentCamera or camera
                     start_position = frame.Position
-                    start_absolute = frame.AbsolutePosition
-                    start_mouse = input_position(input)
+                    start = input.Position
+                    start_x = (start_position.X.Scale * camera.ViewportSize.X) + start_position.X.Offset
+                    start_y = (start_position.Y.Scale * camera.ViewportSize.Y) + start_position.Y.Offset
                 end
             end)
 
@@ -325,22 +324,20 @@
             end)
 
             library:connection(uis.InputChanged, function(input, game_event) 
-                if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                if dragging and start and input.UserInputType == Enum.UserInputType.MouseMovement then
                     camera = ws.CurrentCamera or camera
-                    local mouse_position = input_position(input)
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
                     local frame_size = frame.AbsoluteSize
-                    local delta = mouse_position - start_mouse
 
-                    local target_x = clamp(start_absolute.X + delta.X, 0, max(0, viewport_x - frame_size.X))
-                    local target_y = math.clamp(start_absolute.Y + delta.Y, 0, max(0, viewport_y - frame_size.Y))
+                    local target_x = clamp(start_x + (input.Position.X - start.X), 0, max(0, viewport_x - frame_size.X))
+                    local target_y = math.clamp(start_y + (input.Position.Y - start.Y), 0, max(0, viewport_y - frame_size.Y))
 
                     local current_position = dim2(
-                        start_position.X.Scale,
-                        target_x - (start_position.X.Scale * viewport_x),
-                        start_position.Y.Scale,
-                        target_y - (start_position.Y.Scale * viewport_y)
+                        0,
+                        target_x,
+                        0,
+                        target_y
                     )
 
                     library:tween(frame, {Position = current_position}, Enum.EasingStyle.Linear, 0.05)
