@@ -340,7 +340,7 @@
                         )
                     )
 
-                    library:tween(frame, {Position = current_position}, Enum.EasingStyle.Linear, 0.05)
+                    frame.Position = current_position
                     library:close_element()
                 end
             end)
@@ -628,8 +628,9 @@
             local margin = 8
             local panel_width = outline.AbsoluteSize.X > 0 and outline.AbsoluteSize.X or (list.options and list.options.width) or 215
             local height = panel_height or outline.AbsoluteSize.Y
-            local x = outline.AbsolutePosition.X
-            local y = outline.AbsolutePosition.Y
+            local pos = outline.Position
+            local x = (pos.X.Scale * viewport_x) + pos.X.Offset
+            local y = (pos.Y.Scale * viewport_y) + pos.Y.Offset
 
             x = clamp(x, margin, max(margin, viewport_x - panel_width - margin))
             y = clamp(y, margin, max(margin, viewport_y - height - margin))
@@ -4168,12 +4169,12 @@
 
             local column = menu:column({})
             local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
-            section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = library:_keybind_list_option("enabled", false), callback = function(bool) library:keybind_list({enabled = bool}) end})
+            section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = library:_keybind_list_option("enabled", true), callback = function(bool) library:keybind_list({enabled = bool}) end})
             section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "All"), callback = function(value) library:keybind_list({mode = value}) end})
             section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = library:_keybind_list_option("show_unbound", false), callback = function(bool) library:keybind_list({show_unbound = bool}) end})
-            section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = library:_keybind_list_option("auto_height", true), callback = function(bool) library:keybind_list({auto_height = bool}) end})
-            section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 230), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
-            section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 260), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
+            section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = library:_keybind_list_option("auto_height", false), callback = function(bool) library:keybind_list({auto_height = bool}) end})
+            section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
+            section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 250), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
         end
     --
 
