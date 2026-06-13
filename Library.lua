@@ -104,9 +104,12 @@
         [Enum.KeyCode.Insert] = "INS",
         [Enum.KeyCode.Backspace] = "BS",
         [Enum.KeyCode.Return] = "Ent",
+        [Enum.KeyCode.Delete] = "Del",
         [Enum.KeyCode.LeftAlt] = "LA",
         [Enum.KeyCode.RightAlt] = "RA",
         [Enum.KeyCode.CapsLock] = "CAPS",
+        [Enum.KeyCode.PageUp] = "PgUp",
+        [Enum.KeyCode.PageDown] = "PgDn",
         [Enum.KeyCode.One] = "1",
         [Enum.KeyCode.Two] = "2",
         [Enum.KeyCode.Three] = "3",
@@ -127,6 +130,10 @@
         [Enum.KeyCode.KeypadEight] = "Num8",
         [Enum.KeyCode.KeypadNine] = "Num9",
         [Enum.KeyCode.KeypadZero] = "Num0",
+        [Enum.KeyCode.KeypadPlus] = "Num+",
+        [Enum.KeyCode.KeypadMinus] = "Num-",
+        [Enum.KeyCode.KeypadEnter] = "NumEnt",
+        [Enum.KeyCode.KeypadPeriod] = "Num.",
         [Enum.KeyCode.Minus] = "-",
         [Enum.KeyCode.Equals] = "=",
         [Enum.KeyCode.Tilde] = "~",
@@ -553,6 +560,7 @@
                         enabled = false,
                         mode = "All",
                         show_unbound = false,
+                        auto_height = true,
                         width = 230,
                         max_height = 260,
                         position = dim2(0, 20, 0.5, -130),
@@ -578,6 +586,9 @@
             if options.show_unbound == nil then
                 options.show_unbound = false
             end
+            if options.auto_height == nil then
+                options.auto_height = true
+            end
             if not options.width then
                 options.width = 230
             end
@@ -595,31 +606,62 @@
             local list = library:_ensure_keybind_list()
             local items = list.items
 
-            if items["outline"] or not library["other"] then
+            if items["outline"] then
+                return list
+            end
+
+            if not library["keybind_gui"] then
+                library["keybind_gui"] = library:create("ScreenGui", {
+                    Parent = coregui;
+                    Name = "multyhub_keybinds";
+                    Enabled = false;
+                    ZIndexBehavior = Enum.ZIndexBehavior.Global;
+                    IgnoreGuiInset = true;
+                })
+            end
+
+            if not library["keybind_gui"] then
                 return list
             end
 
             items["outline"] = library:create("Frame", {
-                Parent = library["other"];
+                Parent = library["keybind_gui"];
                 Name = "\0";
                 Position = list.options.position;
                 Size = dim2(0, list.options.width, 0, 38);
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
-                BackgroundColor3 = rgb(25, 25, 29);
+                BackgroundColor3 = rgb(14, 14, 16);
                 Visible = list.options.enabled == true;
-                ClipsDescendants = true;
+                ClipsDescendants = false;
             })
 
             library:create("UICorner", {
                 Parent = items["outline"];
-                CornerRadius = dim(0, 7);
+                CornerRadius = dim(0, 8);
             })
 
             library:create("UIStroke", {
                 Parent = items["outline"];
                 Color = rgb(23, 23, 29);
                 ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            })
+
+            items["shadow"] = library:create("ImageLabel", {
+                Parent = items["outline"];
+                Name = "\0";
+                Image = "rbxassetid://112971167999062";
+                ImageColor3 = rgb(0, 0, 0);
+                BackgroundTransparency = 1;
+                BorderColor3 = rgb(0, 0, 0);
+                BorderSizePixel = 0;
+                AnchorPoint = vec2(0.5, 0.5);
+                Position = dim2(0.5, 0, 0.5, 0);
+                Size = dim2(1, 62, 1, 62);
+                ScaleType = Enum.ScaleType.Slice;
+                SliceScale = 0.75;
+                SliceCenter = rect(vec2(112, 112), vec2(147, 147));
+                ZIndex = -1;
             })
 
             items["inline"] = library:create("Frame", {
@@ -629,18 +671,18 @@
                 Size = dim2(1, -2, 1, -2);
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
-                BackgroundColor3 = rgb(22, 22, 24);
+                BackgroundColor3 = rgb(14, 14, 16);
             })
 
             library:create("UICorner", {
                 Parent = items["inline"];
-                CornerRadius = dim(0, 7);
+                CornerRadius = dim(0, 8);
             })
 
             items["header"] = library:create("Frame", {
                 Parent = items["inline"];
                 Name = "\0";
-                Size = dim2(1, 0, 0, 32);
+                Size = dim2(1, 0, 0, 34);
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
                 BackgroundTransparency = 1;
@@ -658,7 +700,7 @@
                 BackgroundTransparency = 1;
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
-                Position = dim2(0, 9, 0, 0);
+                Position = dim2(0, 10, 0, 0);
                 Size = dim2(1, -72, 1, 0);
                 BackgroundColor3 = rgb(255, 255, 255);
             })
@@ -674,25 +716,25 @@
                 BackgroundTransparency = 1;
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
-                Position = dim2(1, -58, 0, 0);
-                Size = dim2(0, 48, 1, 0);
+                Position = dim2(1, -66, 0, 0);
+                Size = dim2(0, 56, 1, 0);
                 BackgroundColor3 = rgb(255, 255, 255);
             }); library:apply_theme(items["mode"], "accent", "TextColor3")
 
             items["line"] = library:create("Frame", {
                 Parent = items["inline"];
                 Name = "\0";
-                Position = dim2(0, 9, 0, 31);
-                Size = dim2(1, -18, 0, 1);
+                Position = dim2(0, 10, 0, 33);
+                Size = dim2(1, -20, 0, 1);
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
-                BackgroundColor3 = rgb(32, 32, 35);
+                BackgroundColor3 = rgb(21, 21, 23);
             })
 
             items["scroll"] = library:create("ScrollingFrame", {
                 Parent = items["inline"];
                 Name = "\0";
-                Position = dim2(0, 0, 0, 34);
+                Position = dim2(0, 0, 0, 36);
                 Size = dim2(1, 0, 0, 0);
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
@@ -709,8 +751,8 @@
             items["rows"] = library:create("Frame", {
                 Parent = items["scroll"];
                 Name = "\0";
-                Size = dim2(1, -8, 0, 0);
-                Position = dim2(0, 4, 0, 4);
+                Size = dim2(1, -14, 0, 0);
+                Position = dim2(0, 7, 0, 6);
                 BorderColor3 = rgb(0, 0, 0);
                 BorderSizePixel = 0;
                 BackgroundTransparency = 1;
@@ -720,13 +762,13 @@
 
             library:create("UIListLayout", {
                 Parent = items["rows"];
-                Padding = dim(0, 4);
+                Padding = dim(0, 5);
                 SortOrder = Enum.SortOrder.LayoutOrder;
             })
 
             library:create("UIPadding", {
                 Parent = items["rows"];
-                PaddingBottom = dim(0, 4);
+                PaddingBottom = dim(0, 6);
             })
 
             library:draggify(items["outline"])
@@ -739,7 +781,7 @@
             local options = list.options
 
             if not items["outline"] then
-                if not library["other"] then
+                if not library["keybind_gui"] and not coregui then
                     return
                 end
 
@@ -747,8 +789,8 @@
                 items = list.items
             end
 
-            if library["other"] then
-                library["other"].Enabled = options.enabled == true
+            if library["keybind_gui"] then
+                library["keybind_gui"].Enabled = options.enabled == true
             end
 
             items["outline"].Visible = options.enabled == true
@@ -800,7 +842,7 @@
                     local row = library:create("Frame", {
                         Parent = items["rows"];
                         Name = "\0";
-                        Size = dim2(1, 0, 0, 24);
+                        Size = dim2(1, 0, 0, 26);
                         BackgroundTransparency = 1;
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
@@ -815,7 +857,7 @@
                         Size = dim2(1, 0, 1, 0);
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
-                        BackgroundColor3 = active and rgb(31, 31, 34) or rgb(27, 27, 30);
+                        BackgroundColor3 = active and rgb(25, 25, 29) or rgb(22, 22, 24);
                     })
 
                     library:create("UICorner", {
@@ -823,11 +865,17 @@
                         CornerRadius = dim(0, 5);
                     })
 
+                    library:create("UIStroke", {
+                        Parent = bg;
+                        Color = active and rgb(35, 35, 39) or rgb(28, 28, 31);
+                        ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+                    })
+
                     local accent = library:create("Frame", {
                         Parent = bg;
                         Name = "\0";
-                        Position = dim2(0, 6, 0, 6);
-                        Size = dim2(0, 2, 1, -12);
+                        Position = dim2(0, 7, 0, 7);
+                        Size = dim2(0, 2, 1, -14);
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
                         BackgroundColor3 = active and themes.preset.accent or rgb(58, 58, 62);
@@ -850,8 +898,8 @@
                         BackgroundTransparency = 1;
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
-                        Position = dim2(0, 13, 0, 0);
-                        Size = dim2(1, -118, 1, 0);
+                        Position = dim2(0, 15, 0, 0);
+                        Size = dim2(1, -128, 1, 0);
                         BackgroundColor3 = rgb(255, 255, 255);
                     })
 
@@ -867,8 +915,8 @@
                         BackgroundTransparency = 1;
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
-                        Position = dim2(1, -100, 0, 0);
-                        Size = dim2(0, 43, 1, 0);
+                        Position = dim2(1, -116, 0, 0);
+                        Size = dim2(0, 48, 1, 0);
                         BackgroundColor3 = rgb(255, 255, 255);
                     })
 
@@ -876,8 +924,8 @@
                         Parent = bg;
                         Name = "\0";
                         AnchorPoint = vec2(1, 0.5);
-                        Position = dim2(1, -7, 0.5, 0);
-                        Size = dim2(0, 48, 0, 16);
+                        Position = dim2(1, -8, 0.5, 0);
+                        Size = dim2(0, 58, 0, 16);
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
                         BackgroundColor3 = active and rgb(43, 43, 46) or rgb(33, 33, 35);
@@ -895,6 +943,7 @@
                         Text = library:_keybind_list_key_text(cfg.key);
                         TextColor3 = active and themes.preset.accent or rgb(140, 140, 144);
                         TextSize = 11;
+                        TextTruncate = Enum.TextTruncate.AtEnd;
                         BackgroundTransparency = 1;
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
@@ -906,10 +955,11 @@
             end
 
             local row_count = max(#rows, 1)
-            local content_height = 8 + (row_count * 28)
-            local scroll_height = min(content_height, options.max_height)
+            local content_height = 12 + (row_count * 31)
+            local scroll_height = options.auto_height and content_height or min(content_height, options.max_height)
             items["scroll"].Size = dim2(1, 0, 0, scroll_height)
-            items["outline"].Size = dim2(0, options.width, 0, 36 + scroll_height)
+            items["scroll"].ScrollBarThickness = options.auto_height and 0 or 2
+            items["outline"].Size = dim2(0, options.width, 0, 38 + scroll_height)
         end
 
         function library:_register_keybind(cfg)
@@ -953,6 +1003,11 @@
             elseif options.showUnbound ~= nil then
                 opts.show_unbound = options.showUnbound == true
             end
+            if options.auto_height ~= nil then
+                opts.auto_height = options.auto_height == true
+            elseif options.autoHeight ~= nil then
+                opts.auto_height = options.autoHeight == true
+            end
             if options.width then
                 opts.width = clamp(tonumber(options.width) or opts.width, 160, 420)
             end
@@ -989,6 +1044,10 @@
 
             if library[ "notif_gui" ] then
                 library[ "notif_gui" ]:Destroy()
+            end
+
+            if library[ "keybind_gui" ] then
+                library[ "keybind_gui" ]:Destroy()
             end
             
             for index, connection in library.connections do 
@@ -4070,6 +4129,7 @@
             section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = library:_keybind_list_option("enabled", false), callback = function(bool) library:keybind_list({enabled = bool}) end})
             section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "All"), callback = function(value) library:keybind_list({mode = value}) end})
             section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = library:_keybind_list_option("show_unbound", false), callback = function(bool) library:keybind_list({show_unbound = bool}) end})
+            section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = library:_keybind_list_option("auto_height", true), callback = function(bool) library:keybind_list({auto_height = bool}) end})
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 230), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
             section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 260), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
         end
