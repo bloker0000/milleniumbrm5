@@ -649,7 +649,7 @@
                 library["keybind_gui"] = library:create("ScreenGui", {
                     Parent = coregui;
                     Name = "multyhub_keybinds";
-                    Enabled = false;
+                    Enabled = list.options.enabled == true;
                     ZIndexBehavior = Enum.ZIndexBehavior.Global;
                     IgnoreGuiInset = true;
                 })
