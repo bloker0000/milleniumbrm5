@@ -4200,6 +4200,14 @@
             section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = library:_keybind_list_option("auto_height", false), callback = function(bool) library:keybind_list({auto_height = bool}) end})
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
             section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 250), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
+            library:keybind_list({
+                enabled = library:_keybind_list_option("enabled", true),
+                mode = library:_keybind_list_option("mode", "Active"),
+                show_unbound = library:_keybind_list_option("show_unbound", false),
+                auto_height = library:_keybind_list_option("auto_height", false),
+                width = library:_keybind_list_option("width", 215),
+                height = library:_keybind_list_option("max_height", 250),
+            })
         end
     --
 
