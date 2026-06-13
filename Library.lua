@@ -301,14 +301,12 @@
 
         function library:draggify(frame)
             local dragging = false 
-            local start_size = frame.AbsolutePosition
-            local start 
+            local drag_offset = vec2()
 
             frame.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and not library._drag_locked then
                     dragging = true
-                    start = input.Position
-                    start_size = frame.AbsolutePosition
+                    drag_offset = uis:GetMouseLocation() - frame.AbsolutePosition
                 end
             end)
 
@@ -321,6 +319,7 @@
             library:connection(uis.InputChanged, function(input, game_event) 
                 if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
                     camera = ws.CurrentCamera or camera
+                    local mouse_position = uis:GetMouseLocation()
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
                     local frame_size = frame.AbsoluteSize
@@ -328,19 +327,19 @@
                     local current_position = dim2(
                         0,
                         clamp(
-                            start_size.X + (input.Position.X - start.X),
+                            mouse_position.X - drag_offset.X,
                             0,
                             max(0, viewport_x - frame_size.X)
                         ),
                         0,
                         math.clamp(
-                            start_size.Y + (input.Position.Y - start.Y),
+                            mouse_position.Y - drag_offset.Y,
                             0,
                             max(0, viewport_y - frame_size.Y)
                         )
                     )
 
-                    frame.Position = current_position
+                    library:tween(frame, {Position = current_position}, Enum.EasingStyle.Linear, 0.05)
                     library:close_element()
                 end
             end)
