@@ -301,6 +301,7 @@
 
         function library:draggify(frame)
             local dragging = false 
+            local normalized = false
             local drag_offset = vec2()
             local input_position = function(input)
                 local position = input.Position
@@ -310,8 +311,8 @@
             frame.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and not library._drag_locked then
                     dragging = true
+                    normalized = false
                     local absolute_position = frame.AbsolutePosition
-                    frame.Position = dim2(0, absolute_position.X, 0, absolute_position.Y)
                     drag_offset = input_position(input) - absolute_position
                 end
             end)
@@ -329,6 +330,12 @@
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
                     local frame_size = frame.AbsoluteSize
+
+                    if not normalized then
+                        normalized = true
+                        local absolute_position = frame.AbsolutePosition
+                        frame.Position = dim2(0, absolute_position.X, 0, absolute_position.Y)
+                    end
 
                     local current_position = dim2(
                         0,
