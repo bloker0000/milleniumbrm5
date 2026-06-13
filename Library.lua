@@ -560,7 +560,7 @@
                     rows = {},
                     options = {
                         enabled = true,
-                        mode = "All",
+                        mode = "Active",
                         show_unbound = false,
                         auto_height = false,
                         width = 215,
@@ -583,7 +583,7 @@
                 options.enabled = true
             end
             if not options.mode then
-                options.mode = "All"
+                options.mode = "Active"
             end
             if options.show_unbound == nil then
                 options.show_unbound = false
@@ -4195,7 +4195,7 @@
             local column = menu:column({})
             local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = library:_keybind_list_option("enabled", true), callback = function(bool) library:keybind_list({enabled = bool}) end})
-            section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "All"), callback = function(value) library:keybind_list({mode = value}) end})
+            section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "Active"), callback = function(value) library:keybind_list({mode = value}) end})
             section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = library:_keybind_list_option("show_unbound", false), callback = function(bool) library:keybind_list({show_unbound = bool}) end})
             section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = library:_keybind_list_option("auto_height", false), callback = function(bool) library:keybind_list({auto_height = bool}) end})
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
