@@ -1008,7 +1008,7 @@
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
                         Size = dim2(1, -6, 1, 0);
-                        Position = dim2(0, 3, 0, 1);
+                        Position = dim2(0, 3, 0, 5);
                         BackgroundColor3 = rgb(255, 255, 255);
                     })
                 end
