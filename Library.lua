@@ -815,6 +815,35 @@
             local items = list.items
             local options = list.options
 
+            if library._keybind_list_lock_defaults == true and library._keybind_list_user_touched ~= true then
+                options.enabled = true
+                options.mode = "All"
+                options.show_unbound = false
+                options.auto_height = true
+
+                local controls = library._keybind_list_controls
+                if controls and library._keybind_list_syncing_controls ~= true then
+                    local previous_syncing = library._keybind_list_syncing_controls
+                    local previous_forcing = library._keybind_list_forcing_defaults
+                    library._keybind_list_syncing_controls = true
+                    library._keybind_list_forcing_defaults = true
+                    if controls.enabled and controls.enabled.set then
+                        controls.enabled.set(true)
+                    end
+                    if controls.mode and controls.mode.set then
+                        controls.mode.set("All")
+                    end
+                    if controls.show_unbound and controls.show_unbound.set then
+                        controls.show_unbound.set(false)
+                    end
+                    if controls.auto_height and controls.auto_height.set then
+                        controls.auto_height.set(true)
+                    end
+                    library._keybind_list_forcing_defaults = previous_forcing
+                    library._keybind_list_syncing_controls = previous_syncing
+                end
+            end
+
             if not items["outline"] then
                 if not library["keybind_gui"] and not coregui then
                     return
@@ -1059,7 +1088,7 @@
             local list = library:_ensure_keybind_list()
             local opts = list.options
             options = options or {}
-            local lock_false = library._keybind_list_lock_defaults == true and library._keybind_list_user_change ~= true
+            local lock_false = library._keybind_list_lock_defaults == true and library._keybind_list_user_touched ~= true and library._keybind_list_user_change ~= true
 
             if options.enabled ~= nil then
                 if not (lock_false and options.enabled ~= true) then
@@ -4210,7 +4239,8 @@
             library._keybind_list_lock_defaults = true
             local function update_keybind_list_from_control(options)
                 local previous_user_change = library._keybind_list_user_change
-                if not library._keybind_list_forcing_defaults then
+                if not library._keybind_list_forcing_defaults and not library._keybind_list_syncing_controls then
+                    library._keybind_list_user_touched = true
                     library._keybind_list_user_change = true
                 end
                 library:keybind_list(options)
@@ -4220,6 +4250,12 @@
             local keybind_list_mode = section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = "All", callback = function(value) update_keybind_list_from_control({mode = value}) end})
             local keybind_list_show_unbound = section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = false, callback = function(bool) update_keybind_list_from_control({show_unbound = bool}) end})
             local keybind_list_auto_height = section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = true, callback = function(bool) update_keybind_list_from_control({auto_height = bool}) end})
+            library._keybind_list_controls = {
+                enabled = keybind_list_enabled,
+                mode = keybind_list_mode,
+                show_unbound = keybind_list_show_unbound,
+                auto_height = keybind_list_auto_height,
+            }
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
             section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 250), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
             local function guard_keybind_list_setter(flag, control)
