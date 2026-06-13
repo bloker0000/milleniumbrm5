@@ -310,7 +310,9 @@
             frame.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and not library._drag_locked then
                     dragging = true
-                    drag_offset = input_position(input) - frame.AbsolutePosition
+                    local absolute_position = frame.AbsolutePosition
+                    frame.Position = dim2(0, absolute_position.X, 0, absolute_position.Y)
+                    drag_offset = input_position(input) - absolute_position
                 end
             end)
 
