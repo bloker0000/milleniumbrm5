@@ -302,11 +302,15 @@
         function library:draggify(frame)
             local dragging = false 
             local drag_offset = vec2()
+            local input_position = function(input)
+                local position = input.Position
+                return vec2(position.X, position.Y)
+            end
 
             frame.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and not library._drag_locked then
                     dragging = true
-                    drag_offset = uis:GetMouseLocation() - frame.AbsolutePosition
+                    drag_offset = input_position(input) - frame.AbsolutePosition
                 end
             end)
 
@@ -319,7 +323,7 @@
             library:connection(uis.InputChanged, function(input, game_event) 
                 if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
                     camera = ws.CurrentCamera or camera
-                    local mouse_position = uis:GetMouseLocation()
+                    local mouse_position = input_position(input)
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
                     local frame_size = frame.AbsoluteSize
