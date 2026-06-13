@@ -4194,14 +4194,17 @@
 
             local column = menu:column({})
             local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
-            section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = library:_keybind_list_option("enabled", true), callback = function(bool) library:keybind_list({enabled = bool}) end})
+            local keybind_list_enabled = section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = true, callback = function(bool) library:keybind_list({enabled = bool}) end})
             section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = library:_keybind_list_option("mode", "Active"), callback = function(value) library:keybind_list({mode = value}) end})
             section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = library:_keybind_list_option("show_unbound", false), callback = function(bool) library:keybind_list({show_unbound = bool}) end})
             section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = library:_keybind_list_option("auto_height", false), callback = function(bool) library:keybind_list({auto_height = bool}) end})
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
             section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 250), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
+            if keybind_list_enabled and keybind_list_enabled.set then
+                keybind_list_enabled.set(true)
+            end
             library:keybind_list({
-                enabled = library:_keybind_list_option("enabled", true),
+                enabled = true,
                 mode = library:_keybind_list_option("mode", "Active"),
                 show_unbound = library:_keybind_list_option("show_unbound", false),
                 auto_height = library:_keybind_list_option("auto_height", false),
