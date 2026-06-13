@@ -953,7 +953,7 @@
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
                         AnchorPoint = vec2(0, 0.5);
-                        Position = dim2(0, 15, 0.5, 0);
+                        Position = dim2(0, 15, 0.5, -1);
                         Size = dim2(1, -name_right, 0, 18);
                         TextYAlignment = Enum.TextYAlignment.Center;
                         BackgroundColor3 = rgb(255, 255, 255);
@@ -972,7 +972,7 @@
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
                         AnchorPoint = vec2(1, 0.5);
-                        Position = dim2(1, -(right_padding + key_width + key_gap), 0.5, 0);
+                        Position = dim2(1, -(right_padding + key_width + key_gap), 0.5, -1);
                         Size = dim2(0, mode_width, 0, 16);
                         TextYAlignment = Enum.TextYAlignment.Center;
                         BackgroundColor3 = rgb(255, 255, 255);
@@ -1008,7 +1008,7 @@
                         BorderColor3 = rgb(0, 0, 0);
                         BorderSizePixel = 0;
                         Size = dim2(1, -6, 1, 0);
-                        Position = dim2(0, 3, 0, -1);
+                        Position = dim2(0, 3, 0, 0);
                         BackgroundColor3 = rgb(255, 255, 255);
                     })
                 end
