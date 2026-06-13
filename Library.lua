@@ -301,14 +301,14 @@
 
         function library:draggify(frame)
             local dragging = false 
-            local start_size = frame.Position
+            local start_size = frame.AbsolutePosition
             local start 
 
             frame.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and not library._drag_locked then
                     dragging = true
                     start = input.Position
-                    start_size = frame.Position
+                    start_size = frame.AbsolutePosition
                 end
             end)
 
@@ -320,21 +320,23 @@
 
             library:connection(uis.InputChanged, function(input, game_event) 
                 if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    camera = ws.CurrentCamera or camera
                     local viewport_x = camera.ViewportSize.X
                     local viewport_y = camera.ViewportSize.Y
+                    local frame_size = frame.AbsoluteSize
 
                     local current_position = dim2(
                         0,
                         clamp(
-                            start_size.X.Offset + (input.Position.X - start.X),
+                            start_size.X + (input.Position.X - start.X),
                             0,
-                            viewport_x - frame.Size.X.Offset
+                            max(0, viewport_x - frame_size.X)
                         ),
                         0,
                         math.clamp(
-                            start_size.Y.Offset + (input.Position.Y - start.Y),
+                            start_size.Y + (input.Position.Y - start.Y),
                             0,
-                            viewport_y - frame.Size.Y.Offset
+                            max(0, viewport_y - frame_size.Y)
                         )
                     )
 
@@ -557,13 +559,13 @@
                     order = {},
                     rows = {},
                     options = {
-                        enabled = false,
+                        enabled = true,
                         mode = "All",
                         show_unbound = false,
-                        auto_height = true,
-                        width = 230,
-                        max_height = 260,
-                        position = dim2(0, 20, 0.5, -130),
+                        auto_height = false,
+                        width = 215,
+                        max_height = 250,
+                        position = dim2(0, 20, 0.72, -125),
                     },
                     items = {},
                 }
@@ -578,7 +580,7 @@
 
             local options = list.options
             if options.enabled == nil then
-                options.enabled = false
+                options.enabled = true
             end
             if not options.mode then
                 options.mode = "All"
@@ -587,19 +589,51 @@
                 options.show_unbound = false
             end
             if options.auto_height == nil then
-                options.auto_height = true
+                options.auto_height = false
             end
             if not options.width then
-                options.width = 230
+                options.width = 215
             end
             if not options.max_height then
-                options.max_height = 260
+                options.max_height = 250
             end
             if not options.position then
-                options.position = dim2(0, 20, 0.5, -130)
+                options.position = dim2(0, 20, 0.72, -125)
             end
 
             return list
+        end
+
+        function library:_keybind_list_viewport()
+            camera = ws.CurrentCamera or camera
+            local viewport = camera and camera.ViewportSize
+
+            if viewport then
+                return viewport.X, viewport.Y
+            end
+
+            return 1920, 1080
+        end
+
+        function library:_clamp_keybind_list_bounds(panel_height)
+            local list = library._keybind_list
+            local items = list and list.items
+            local outline = items and items["outline"]
+
+            if not outline then
+                return
+            end
+
+            local viewport_x, viewport_y = library:_keybind_list_viewport()
+            local margin = 8
+            local panel_width = outline.AbsoluteSize.X > 0 and outline.AbsoluteSize.X or (list.options and list.options.width) or 215
+            local height = panel_height or outline.AbsoluteSize.Y
+            local x = outline.AbsolutePosition.X
+            local y = outline.AbsolutePosition.Y
+
+            x = clamp(x, margin, max(margin, viewport_x - panel_width - margin))
+            y = clamp(y, margin, max(margin, viewport_y - height - margin))
+            outline.Position = dim2(0, x, 0, y)
         end
 
         function library:_create_keybind_list()
@@ -956,10 +990,18 @@
 
             local row_count = max(#rows, 1)
             local content_height = 12 + (row_count * 31)
-            local scroll_height = options.auto_height and content_height or min(content_height, options.max_height)
+            local _, viewport_y = library:_keybind_list_viewport()
+            local max_panel_height = max(90, viewport_y - 16)
+            local max_scroll_height = max(52, max_panel_height - 38)
+            local wanted_scroll_height = options.auto_height and content_height or min(content_height, options.max_height)
+            local scroll_height = min(wanted_scroll_height, max_scroll_height)
+            local has_overflow = content_height > scroll_height
+            local panel_height = 38 + scroll_height
+
             items["scroll"].Size = dim2(1, 0, 0, scroll_height)
-            items["scroll"].ScrollBarThickness = options.auto_height and 0 or 2
-            items["outline"].Size = dim2(0, options.width, 0, 38 + scroll_height)
+            items["scroll"].ScrollBarThickness = has_overflow and 2 or 0
+            items["outline"].Size = dim2(0, options.width, 0, panel_height)
+            library:_clamp_keybind_list_bounds(panel_height)
         end
 
         function library:_register_keybind(cfg)
