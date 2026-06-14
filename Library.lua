@@ -5289,7 +5289,7 @@
             section:button({name = "Delete", callback = function() local cfgName = flags["config_name_list"] or "default"; pcall(function() delfile(library.directory .. "/configs/" .. cfgName .. ".cfg") end); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. cfgName}) end})
 
             local autoload_section = column:section({name = "Auto Load", side = "right", size = 1, default = true, icon = "rbxassetid://7734053039"})
-            local autoload_enabled_control = autoload_section:toggle({name = "Auto Load on Start", flag = "config_autoload_enabled", default = false, seperator = true, callback = function() library:_brm5_sync_autoload() end, info = "Loads the selected config automatically each time the script runs."})
+            local autoload_enabled_control = autoload_section:toggle({name = "Auto Load on Start", flag = "config_autoload_enabled", default = false, seperator = true, callback = function() library:_brm5_sync_autoload() end})
             local autoload_name_control = autoload_section:dropdown({name = "Config", flag = "config_autoload_name", items = {"None"}, default = "None", callback = function() library:_brm5_sync_autoload() end})
             library:_brm5_register_autoload_controls(autoload_enabled_control, autoload_name_control)
 
