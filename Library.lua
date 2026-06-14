@@ -439,7 +439,9 @@
         end
 
         function library:_brm5_sync_autoload()
-            local enabled = flags["config_autoload_enabled"] == true
+            -- NOTE: the toggle control writes flags[flag] AFTER firing its callback, so read
+            -- the control's live .enabled field instead of the (stale) flag value here.
+            local enabled = autoload_toggle ~= nil and autoload_toggle.enabled == true
             local name = flags["config_autoload_name"]
             if type(name) == "table" then
                 name = name[1]
@@ -531,14 +533,16 @@
             local Config = {}
             
             for _, v in next, flags do
-                if type(v) == "table" and v.key then
+                if _ == "config_autoload_enabled" or _ == "config_autoload_name" then
+                    -- auto-load target lives only in autoload.txt; never bake it into a saved config
+                elseif type(v) == "table" and v.key then
                     Config[_] = {active = v.active, mode = v.mode, key = tostring(v.key)}
                 elseif type(v) == "table" and v["Transparency"] and v["Color"] then
                     Config[_] = {Transparency = v["Transparency"], Color = v["Color"]:ToHex()}
                 else
                     Config[_] = v
                 end
-            end 
+            end
             
             return http_service:JSONEncode(Config)
         end
