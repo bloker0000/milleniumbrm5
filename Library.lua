@@ -1285,6 +1285,14 @@
             function library:_ensure_info_list()
                 local info = library._info_list
                 if not info then
+                    local session_start
+                    if getgenv then
+                        local env = getgenv()
+                        if env.BRM5_SESSION_START == nil then
+                            env.BRM5_SESSION_START = os.clock()
+                        end
+                        session_start = env.BRM5_SESSION_START
+                    end
                     info = {
                         options = default_info_options(),
                         items = {},
@@ -1296,7 +1304,7 @@
                         fps_now = 0,
                         fps_min = nil,
                         fps_max = nil,
-                        start_clock = os.clock(),
+                        start_clock = session_start or os.clock(),
                         warmup_until = os.clock() + 2,
                         last_update = 0,
                         game_name = nil,
@@ -1833,7 +1841,8 @@
                     set_info_value(info, "players", (mx and mx > 0) and (n .. "/" .. mx) or tostring(n))
                 end
                 if items.session then
-                    local secs = floor(now - info.start_clock)
+                    local base = (getgenv and getgenv().BRM5_SESSION_START) or info.start_clock
+                    local secs = floor(now - base)
                     local h = floor(secs / 3600)
                     local m = floor((secs % 3600) / 60)
                     local s = secs % 60
