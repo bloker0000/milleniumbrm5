@@ -526,7 +526,18 @@
                 end
             end 
 
-            themes.preset[theme] = color 
+            themes.preset[theme] = color
+
+            if theme == "accent" then
+                pcall(function()
+                    if library._window_title_label then
+                        library._window_title_label.TextColor3 = color
+                    end
+                    if library._window_footer_label then
+                        library._window_footer_label.TextColor3 = color
+                    end
+                end)
+            end
 
             if library._refresh_keybind_list then
                 library:_refresh_keybind_list()
@@ -2164,7 +2175,8 @@
                     TextSize = 30;
                     BackgroundColor3 = rgb(255, 255, 255)
                 }); library:apply_theme(items[ "title" ], "accent", "TextColor3");
-                
+                library._window_title_label = items[ "title" ]
+
                 items[ "multi_holder" ] = library:create( "Frame" , {
                     Parent = items[ "main" ];
                     Name = "\0";
@@ -2281,8 +2293,9 @@
                     FontFace = fonts.font;
                     TextSize = 14;
                     BackgroundColor3 = rgb(255, 255, 255)
-                }); library:apply_theme(items[ "other_info" ], "accent", "TextColor3");        
-            end 
+                }); library:apply_theme(items[ "other_info" ], "accent", "TextColor3");
+                library._window_footer_label = items[ "other_info" ]
+            end
 
             do -- Other
                 library:draggify(items[ "main" ])
