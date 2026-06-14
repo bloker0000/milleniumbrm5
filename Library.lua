@@ -2215,8 +2215,8 @@
                     ZIndex = -100;
                     BorderSizePixel = 0;
                     SliceCenter = rect(vec2(112, 112), vec2(147, 147))
-                });
-                
+                }); library._window_shadow = items[ "shadow" ]
+
                 items[ "global_fade" ] = library:create( "Frame" , {
                     Parent = items[ "main" ];
                     Name = "\0";
@@ -5127,6 +5127,11 @@
             local grey_fill = library._window_grey_fill
             if grey_fill then
                 grey_fill.BackgroundTransparency = transparency
+            end
+
+            local shadow = library._window_shadow
+            if shadow then
+                shadow.ImageTransparency = transparency
             end
         end
 
