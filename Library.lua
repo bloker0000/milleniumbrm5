@@ -1248,6 +1248,9 @@
                 game = "Game",
             }
 
+            local INFO_FPS_WINDOW = 60
+            local INFO_FPS_UPDATE_INTERVAL = 0.1
+
             local function default_info_options()
                 return {
                     enabled = true,
@@ -1725,31 +1728,64 @@
                 local now = os.clock()
                 local samples = info.fps_samples
                 samples[#samples + 1] = now
-                while samples[1] and samples[1] < now - 1 do
+                local sample_cutoff = now - INFO_FPS_WINDOW
+                while samples[1] and samples[1] < sample_cutoff do
                     remove(samples, 1)
                 end
 
-                local fps = #samples
-                info.fps_now = fps
-                if now >= info.warmup_until and fps > 0 then
-                    if not info.fps_min or fps < info.fps_min then
-                        info.fps_min = fps
+                local fps = 0
+                local current_cutoff = now - 1
+                for i = #samples, 1, -1 do
+                    if samples[i] < current_cutoff then
+                        break
                     end
-                    if not info.fps_max or fps > info.fps_max then
-                        info.fps_max = fps
-                    end
+                    fps = fps + 1
                 end
+                info.fps_now = fps
 
-                if now - info.last_update < 0.1 then
+                if now - info.last_update < INFO_FPS_UPDATE_INTERVAL then
                     return
                 end
                 info.last_update = now
 
                 local hist = info.fps_hist
-                hist[#hist + 1] = fps
-                if #hist > 60 then
+                if now >= info.warmup_until and fps > 0 then
+                    hist[#hist + 1] = { t = now, fps = fps }
+                end
+                while hist[1] do
+                    local first = hist[1]
+                    local t = type(first) == "table" and first.t or nil
+                    if t and t >= sample_cutoff then
+                        break
+                    end
                     remove(hist, 1)
                 end
+
+                local sum, count, min_fps, max_fps = 0, 0, nil, nil
+                for _, entry in hist do
+                    local value = type(entry) == "table" and entry.fps or entry
+                    if type(value) == "number" then
+                        sum = sum + value
+                        count = count + 1
+                        if not min_fps or value < min_fps then
+                            min_fps = value
+                        end
+                        if not max_fps or value > max_fps then
+                            max_fps = value
+                        end
+                    end
+                end
+
+                if count == 0 then
+                    sum = fps
+                    count = 1
+                    min_fps = fps
+                    max_fps = fps
+                end
+
+                local avg_fps = floor(sum / count + 0.5)
+                info.fps_min = min_fps
+                info.fps_max = max_fps
 
                 local items = opts.items
 
@@ -1757,18 +1793,13 @@
                     set_info_value(info, "fps", tostring(fps))
                 end
                 if items.avg_fps then
-                    local sum = 0
-                    for _, v in hist do
-                        sum = sum + v
-                    end
-                    local avg = #hist > 0 and floor(sum / #hist + 0.5) or fps
-                    set_info_value(info, "avg_fps", tostring(avg))
+                    set_info_value(info, "avg_fps", tostring(avg_fps))
                 end
                 if items.min_fps then
-                    set_info_value(info, "min_fps", tostring(info.fps_min or fps))
+                    set_info_value(info, "min_fps", tostring(min_fps))
                 end
                 if items.max_fps then
-                    set_info_value(info, "max_fps", tostring(info.fps_max or fps))
+                    set_info_value(info, "max_fps", tostring(max_fps))
                 end
                 if items.ping then
                     local ping = 0
