@@ -1169,6 +1169,8 @@
                     use_accent = true,
                     show_title = true,
                     background_opacity = 1,
+                    layout = "Vertical",
+                    per_column = 4,
                     clock_24h = true,
                     show_seconds = true,
                     date_format = "DD/MM/YYYY",
@@ -1189,6 +1191,7 @@
                         options = default_info_options(),
                         items = {},
                         rows = {},
+                        cols = {},
                         values = {},
                         fps_samples = {},
                         fps_hist = {},
@@ -1368,7 +1371,7 @@
                     BackgroundColor3 = rgb(255, 255, 255);
                 })
 
-                items["list"] = library:create("Frame", {
+                items["colholder"] = library:create("Frame", {
                     Parent = items["rows"];
                     Name = "\0";
                     Position = dim2(0, 10, 0, 4);
@@ -1380,13 +1383,43 @@
                 })
 
                 library:create("UIListLayout", {
-                    Parent = items["list"];
-                    Padding = dim(0, 3);
+                    Parent = items["colholder"];
+                    FillDirection = Enum.FillDirection.Horizontal;
+                    Padding = dim(0, 12);
+                    HorizontalAlignment = Enum.HorizontalAlignment.Left;
+                    VerticalAlignment = Enum.VerticalAlignment.Top;
                     SortOrder = Enum.SortOrder.LayoutOrder;
                 })
 
                 library:draggify(items["outline"])
                 return info
+            end
+
+            local function ensure_info_column(info, idx)
+                local col = info.cols[idx]
+                if col then
+                    return col
+                end
+
+                col = library:create("Frame", {
+                    Parent = info.items["colholder"];
+                    Name = "\0";
+                    Size = dim2(0, 100, 1, 0);
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    BackgroundColor3 = rgb(255, 255, 255);
+                    LayoutOrder = idx;
+                })
+
+                library:create("UIListLayout", {
+                    Parent = col;
+                    Padding = dim(0, 3);
+                    SortOrder = Enum.SortOrder.LayoutOrder;
+                })
+
+                info.cols[idx] = col
+                return col
             end
 
             local function ensure_info_row(info, key)
@@ -1396,7 +1429,6 @@
                 end
 
                 local row = library:create("Frame", {
-                    Parent = info.items["list"];
                     Name = "\0";
                     Size = dim2(1, 0, 0, 18);
                     BackgroundTransparency = 1;
@@ -1480,20 +1512,41 @@
 
                 local ts = clamp(tonumber(opts.text_size) or 13, 10, 20)
                 local value_color = opts.use_accent and themes.preset.accent or rgb(245, 245, 245)
-                local order_index = 0
+                local row_h = max(16, ts + 5)
 
+                local horizontal = tostring(opts.layout) == "Horizontal"
+                local total_enabled = 0
+                for _, key in INFO_ORDER do
+                    if opts.items[key] == true then
+                        total_enabled = total_enabled + 1
+                    end
+                end
+
+                local per_column
+                if horizontal then
+                    per_column = clamp(floor(tonumber(opts.per_column) or 4), 1, 12)
+                else
+                    per_column = total_enabled > 0 and total_enabled or 1
+                end
+
+                local order_index = 0
+                local col_counts = {}
                 for _, key in INFO_ORDER do
                     local enabled = opts.items[key] == true
                     if enabled then
-                        local entry = ensure_info_row(info, key)
                         order_index = order_index + 1
+                        local col_idx = floor((order_index - 1) / per_column) + 1
+                        local col = ensure_info_column(info, col_idx)
+                        local entry = ensure_info_row(info, key)
+                        entry.row.Parent = col
                         entry.row.LayoutOrder = order_index
                         entry.row.Visible = true
-                        entry.row.Size = dim2(1, 0, 0, max(16, ts + 5))
+                        entry.row.Size = dim2(1, 0, 0, row_h)
                         entry.label.Text = INFO_LABELS[key] or key
                         entry.label.TextSize = ts
                         entry.value.TextSize = ts
                         entry.value.TextColor3 = value_color
+                        col_counts[col_idx] = (col_counts[col_idx] or 0) + 1
                     else
                         local entry = info.rows[key]
                         if entry then
@@ -1503,9 +1556,39 @@
                     end
                 end
 
-                local row_h = max(16, ts + 5)
-                local count = order_index
-                local list_h = count > 0 and (count * row_h + (count - 1) * 3) or 0
+                local num_cols = 0
+                local max_rows = 0
+                for idx = 1, #info.cols do
+                    local used = col_counts[idx]
+                    if used and used > 0 then
+                        num_cols = num_cols + 1
+                        if used > max_rows then
+                            max_rows = used
+                        end
+                    end
+                end
+                if num_cols < 1 then
+                    num_cols = 1
+                end
+
+                local side_pad = 10
+                local col_gap = 12
+                local width = clamp(tonumber(opts.width) or 200, 110, 400)
+                local col_width = max(80, width - (2 * side_pad))
+
+                for idx = 1, #info.cols do
+                    local col = info.cols[idx]
+                    local used = col_counts[idx]
+                    if used and used > 0 then
+                        col.Visible = true
+                        col.LayoutOrder = idx
+                        col.Size = dim2(0, col_width, 1, 0)
+                    else
+                        col.Visible = false
+                    end
+                end
+
+                local list_h = max_rows > 0 and (max_rows * row_h + (max_rows - 1) * 3) or 0
                 local header_h = show_title and 36 or 0
                 local top_pad = show_title and 0 or 6
                 local total = header_h + top_pad + list_h + 8
@@ -1514,12 +1597,13 @@
                     total = floor_h
                 end
 
+                local panel_width = (2 * side_pad) + (num_cols * col_width) + ((num_cols - 1) * col_gap)
+
                 items["rows"].Position = dim2(0, 0, 0, header_h + top_pad)
                 items["rows"].Size = dim2(1, 0, 0, list_h + 8)
 
-                local width = clamp(tonumber(opts.width) or 200, 150, 400)
-                items["outline"].Size = dim2(0, width, 0, total)
-                items["outline"].Position = library:_info_position(width, total)
+                items["outline"].Size = dim2(0, panel_width, 0, total)
+                items["outline"].Position = library:_info_position(panel_width, total)
             end
 
             local function set_info_value(info, key, text)
@@ -1688,7 +1772,13 @@
                     opts.position = nil
                 end
                 if options.width ~= nil then
-                    opts.width = clamp(tonumber(options.width) or opts.width, 150, 400)
+                    opts.width = clamp(tonumber(options.width) or opts.width, 110, 400)
+                end
+                if options.layout ~= nil then
+                    opts.layout = tostring(options.layout) == "Horizontal" and "Horizontal" or "Vertical"
+                end
+                if options.per_column ~= nil then
+                    opts.per_column = clamp(floor(tonumber(options.per_column) or opts.per_column), 1, 12)
                 end
                 if options.text_size ~= nil then
                     opts.text_size = clamp(tonumber(options.text_size) or opts.text_size, 10, 20)
@@ -1726,6 +1816,7 @@
                 library:_create_info_list()
                 library:_refresh_info_list()
                 library:_start_info_loop()
+                library:_update_info_values()
 
                 if not info.game_name and not info._fetching_game then
                     info._fetching_game = true
