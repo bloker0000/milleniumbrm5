@@ -973,6 +973,7 @@
             end)
 
             items["mode"].Text = active_only and "ACTIVE" or "ALL"
+            items["mode"].TextColor3 = themes.preset.accent
 
             if #rows == 0 then
                 local empty = library:create("TextLabel", {
@@ -1593,6 +1594,7 @@
                 items["header"].Visible = show_title
                 items["line"].Visible = show_title
                 items["title"].Text = tostring(opts.watermark or "MultyHub")
+                items["title_accent"].TextColor3 = themes.preset.accent
 
                 local bg_t = 1 - clamp(tonumber(opts.background_opacity) or 1, 0, 1)
                 items["inline"].BackgroundTransparency = bg_t
