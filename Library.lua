@@ -4983,8 +4983,20 @@
         end 
 
         function library:init_config(window) 
-            window:seperator({name = "Settings"})
-            local main, menu = window:tab({name = "Configs", tabs = {"Main", "Menu"}})
+            local menu_tabs = library._brm5_menu_settings_tabs
+            local appearance_page = menu_tabs and menu_tabs.appearance
+            local keybind_page = menu_tabs and menu_tabs.keybind_list
+            local use_external_menu = appearance_page and keybind_page
+            local main, menu
+
+            if use_external_menu then
+                main = window:tab({name = "Configs", tabs = {"Main"}})
+            else
+                window:seperator({name = "Settings"})
+                main, menu = window:tab({name = "Configs", tabs = {"Main", "Menu"}})
+                appearance_page = menu
+                keybind_page = menu
+            end
             
             local column = main:column({})
             local section = column:section({name = "Configs", size = 1, default = true, icon = "rbxassetid://139628202576511"})
@@ -4997,12 +5009,12 @@
             section:button({name = "Load", callback = function() local cfgName = flags["config_name_list"] or "default"; local ok, err = pcall(function() library:load_config(readfile(library.directory .. "/configs/" .. cfgName .. ".cfg")) end); if ok then library:update_config_list(); notifications:create_notification({name = "Configs", info = "Loaded config:\n" .. cfgName}) else notifications:create_notification({name = "Configs", info = "Failed to load: " .. cfgName}) end end})
             section:button({name = "Delete", callback = function() local cfgName = flags["config_name_list"] or "default"; pcall(function() delfile(library.directory .. "/configs/" .. cfgName .. ".cfg") end); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. cfgName}) end})
 
-            local column = menu:column({})
+            local column = appearance_page:column({})
             local section = column:section({name = "Appearance", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             section:colorpicker({name = "Accent", flag = "menu_accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
             section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function(bool) window.toggle_menu(bool) end, default = true})
 
-            local column = menu:column({})
+            local column = keybind_page:column({})
             local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
             library._keybind_list_lock_defaults = true
             local function update_keybind_list_from_control(options)
@@ -5107,6 +5119,31 @@
             end
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
             section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 250), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
+            local opacity_default = library:_keybind_list_option("background_opacity", 1)
+            local opacity_getter = library._brm5_keybind_list_background_opacity
+            if type(opacity_getter) == "function" then
+                local ok, value = pcall(opacity_getter)
+                if ok and value ~= nil then
+                    opacity_default = value
+                end
+            end
+            section:slider({
+                name = "Background Opacity",
+                flag = "kbd_list_bg_opacity",
+                min = 0,
+                max = 100,
+                default = clamp(tonumber(opacity_default) or 1, 0, 1) * 100,
+                suffix = "%",
+                callback = function(value)
+                    local opacity = clamp((tonumber(value) or 100) / 100, 0, 1)
+                    local opacity_callback = library._brm5_keybind_list_background_opacity_changed
+                    if type(opacity_callback) == "function" then
+                        opacity_callback(opacity)
+                    else
+                        library:keybind_list({background_opacity = opacity})
+                    end
+                end,
+            })
             local function guard_keybind_list_setter(flag, control)
                 local raw_set = control and control.set
                 if type(raw_set) ~= "function" then
