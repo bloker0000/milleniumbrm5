@@ -532,6 +532,11 @@
             if library._info_list and library._refresh_info_list then
                 library:_refresh_info_list()
             end
+
+            local after_theme_update = library._brm5_after_theme_update
+            if type(after_theme_update) == "function" then
+                pcall(after_theme_update, theme, color)
+            end
         end
 
         function library:connection(signal, callback)
@@ -2240,7 +2245,11 @@
                 -- library:tween(items[ "tab_holder" ], {Size = dim2(1, -196, 1, -81)}, Enum.EasingStyle.Quad, 0.4)
                 -- cfg.tween = 
                 
-                library[ "items" ].Enabled = bool
+                if bool == nil then
+                    bool = not library[ "items" ].Enabled
+                end
+
+                library[ "items" ].Enabled = bool == true
             end 
                 
             return setmetatable(cfg, library)
@@ -4194,6 +4203,10 @@
                     Color = Color;
                     Transparency = a 
                 }
+
+                if cfg.flag == "menu_accent" and type(library.update_theme) == "function" then
+                    pcall(library.update_theme, library, "accent", Color)
+                end
                 
                 local color = items[ "colorpicker" ].BackgroundColor3
                 items[ "input" ].Text = string.format("%s, %s, %s, ", library:round(color.R * 255), library:round(color.G * 255), library:round(color.B * 255))
@@ -5052,8 +5065,8 @@
 
             local column = appearance_page:column({})
             local section = column:section({name = "Appearance", size = 1, default = true, icon = "rbxassetid://129380150574313"})
-            section:colorpicker({name = "Accent", flag = "menu_accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
-            section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function(bool) window.toggle_menu(bool) end, default = true})
+            section:colorpicker({name = "Accent", flag = "menu_accent", color = themes.preset.accent})
+            section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function() window.toggle_menu() end, default = true})
 
             local column = keybind_page:column({})
             local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
