@@ -2095,13 +2095,14 @@
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(14, 14, 16)
                 }); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
-                
+                library._window_main_frame = items[ "main" ]
+
                 library:create( "UICorner" , {
                     Parent = items[ "main" ];
                     CornerRadius = dim(0, 10)
                 });
-                
-                library:create( "UIStroke" , {
+
+                library._window_main_stroke = library:create( "UIStroke" , {
                     Color = rgb(23, 23, 29);
                     Parent = items[ "main" ];
                     ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -2242,13 +2243,13 @@
                     Size = dim2(1, 0, 0, 25);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(23, 23, 25)
-                });
-                
+                }); library._window_info_bar = items[ "info" ]
+
                 library:create( "UICorner" , {
                     Parent = items[ "info" ];
                     CornerRadius = dim(0, 10)
                 });
-                
+
                 items[ "grey_fill" ] = library:create( "Frame" , {
                     Name = "\0";
                     Parent = items[ "info" ];
@@ -2256,7 +2257,7 @@
                     Size = dim2(1, 0, 0, 6);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(23, 23, 25)
-                });
+                }); library._window_grey_fill = items[ "grey_fill" ]
                 
                 items[ "game" ] = library:create( "TextLabel" , {
                     FontFace = fonts.font;
@@ -5103,7 +5104,33 @@
             return setmetatable(cfg, library)
         end 
 
-        function library:init_config(window) 
+        function library:set_menu_background_opacity(opacity)
+            opacity = clamp(tonumber(opacity) or 1, 0, 1)
+            library._menu_background_opacity = opacity
+            local transparency = 1 - opacity
+
+            local main = library._window_main_frame
+            if main then
+                main.BackgroundTransparency = transparency
+            end
+
+            local stroke = library._window_main_stroke
+            if stroke then
+                stroke.Transparency = transparency
+            end
+
+            local info = library._window_info_bar
+            if info then
+                info.BackgroundTransparency = transparency
+            end
+
+            local grey_fill = library._window_grey_fill
+            if grey_fill then
+                grey_fill.BackgroundTransparency = transparency
+            end
+        end
+
+        function library:init_config(window)
             local menu_tabs = library._brm5_menu_settings_tabs
             local appearance_page = menu_tabs and menu_tabs.appearance
             local keybind_page = menu_tabs and menu_tabs.keybind_list
@@ -5134,6 +5161,17 @@
                 local section = column:section({name = "Appearance", size = 1, default = true, icon = "rbxassetid://7734021595"})
             section:colorpicker({name = "Accent", flag = "menu_accent", color = themes.preset.accent})
             section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function() window.toggle_menu() end, default = true})
+            section:slider({
+                name = "Background Opacity",
+                flag = "menu_bg_opacity",
+                min = 0,
+                max = 100,
+                default = 100,
+                suffix = "%",
+                callback = function(value)
+                    library:set_menu_background_opacity((tonumber(value) or 100) / 100)
+                end,
+            })
 
             local column = keybind_page:column({})
                 local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://7733924046"})
