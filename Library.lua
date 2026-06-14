@@ -444,13 +444,42 @@
         end
 
         function library:update_theme(theme, color)
-            for _, property in themes.utility[theme] do 
+            local utility = themes.utility[theme]
+            local previous = themes.preset[theme]
 
-                for m, object in property do 
-                    if object[_] == themes.preset[theme] then 
-                        object[_] = color 
+            if not utility then
+                themes.preset[theme] = color
+                return
+            end
+
+            for property_name, property in utility do
+                local stale
+
+                for index, object in property do
+                    local ok, current = pcall(function()
+                        return object[property_name]
+                    end)
+
+                    if ok and current == previous then
+                        local set_ok = pcall(function()
+                            object[property_name] = color
+                        end)
+
+                        if not set_ok then
+                            stale = stale or {}
+                            insert(stale, index)
+                        end
+                    elseif not ok then
+                        stale = stale or {}
+                        insert(stale, index)
                     end 
-                end 
+                end
+
+                if stale then
+                    for i = #stale, 1, -1 do
+                        remove(property, stale[i])
+                    end
+                end
             end 
 
             themes.preset[theme] = color 
@@ -569,6 +598,7 @@
                         auto_height = true,
                         width = 215,
                         max_height = 250,
+                        background_opacity = 1,
                         position = dim2(0, 20, 0.72, -125),
                     },
                     items = {},
@@ -853,6 +883,15 @@
             items["outline"].Visible = options.enabled == true
             items["outline"].Size = dim2(0, options.width, 0, items["outline"].Size.Y.Offset)
 
+            local kbd_bg_t = 1 - clamp(tonumber(options.background_opacity) or 1, 0, 1)
+            items["outline"].BackgroundTransparency = kbd_bg_t
+            if items["inline"] then
+                items["inline"].BackgroundTransparency = kbd_bg_t
+            end
+            if items["shadow"] then
+                items["shadow"].ImageTransparency = kbd_bg_t
+            end
+
             for _, row in list.rows do
                 row:Destroy()
             end
@@ -1120,6 +1159,9 @@
                 opts.max_height = clamp(tonumber(options.max_height) or opts.max_height, 90, 520)
             elseif options.maxHeight then
                 opts.max_height = clamp(tonumber(options.maxHeight) or opts.max_height, 90, 520)
+            end
+            if options.background_opacity ~= nil then
+                opts.background_opacity = clamp(tonumber(options.background_opacity) or 1, 0, 1)
             end
             if options.position then
                 opts.position = options.position
@@ -1509,6 +1551,9 @@
                 local bg_t = 1 - clamp(tonumber(opts.background_opacity) or 1, 0, 1)
                 items["inline"].BackgroundTransparency = bg_t
                 items["outline"].BackgroundTransparency = bg_t
+                if items["shadow"] then
+                    items["shadow"].ImageTransparency = bg_t
+                end
 
                 local ts = clamp(tonumber(opts.text_size) or 13, 10, 20)
                 local value_color = opts.use_accent and themes.preset.accent or rgb(245, 245, 245)
@@ -1591,7 +1636,8 @@
                 local list_h = max_rows > 0 and (max_rows * row_h + (max_rows - 1) * 3) or 0
                 local header_h = show_title and 36 or 0
                 local top_pad = show_title and 0 or 6
-                local total = header_h + top_pad + list_h + 8
+                local bottom_pad = 11
+                local total = header_h + top_pad + list_h + bottom_pad
                 local floor_h = show_title and 44 or 24
                 if total < floor_h then
                     total = floor_h
@@ -1600,7 +1646,7 @@
                 local panel_width = (2 * side_pad) + (num_cols * col_width) + ((num_cols - 1) * col_gap)
 
                 items["rows"].Position = dim2(0, 0, 0, header_h + top_pad)
-                items["rows"].Size = dim2(1, 0, 0, list_h + 8)
+                items["rows"].Size = dim2(1, 0, 0, list_h + bottom_pad)
 
                 items["outline"].Size = dim2(0, panel_width, 0, total)
                 items["outline"].Position = library:_info_position(panel_width, total)
