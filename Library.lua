@@ -821,24 +821,13 @@
                 options.show_unbound = false
                 options.auto_height = true
 
-                local controls = library._keybind_list_controls
-                if controls and library._keybind_list_syncing_controls ~= true then
+                local sync_controls = library._keybind_list_sync_controls
+                if type(sync_controls) == "function" and library._keybind_list_syncing_controls ~= true then
                     local previous_syncing = library._keybind_list_syncing_controls
                     local previous_forcing = library._keybind_list_forcing_defaults
                     library._keybind_list_syncing_controls = true
                     library._keybind_list_forcing_defaults = true
-                    if controls.enabled and controls.enabled.set then
-                        controls.enabled.set(true)
-                    end
-                    if controls.mode and controls.mode.set then
-                        controls.mode.set("All")
-                    end
-                    if controls.show_unbound and controls.show_unbound.set then
-                        controls.show_unbound.set(false)
-                    end
-                    if controls.auto_height and controls.auto_height.set then
-                        controls.auto_height.set(true)
-                    end
+                    sync_controls()
                     library._keybind_list_forcing_defaults = previous_forcing
                     library._keybind_list_syncing_controls = previous_syncing
                 end
@@ -4256,6 +4245,87 @@
                 show_unbound = keybind_list_show_unbound,
                 auto_height = keybind_list_auto_height,
             }
+            local function set_keybind_list_toggle(control, value)
+                if not control then
+                    return
+                end
+
+                value = value == true
+                control.enabled = value
+                flags[control.flag] = value
+
+                local control_items = control.items
+                if not control_items then
+                    return
+                end
+
+                if control.type == "checkbox" then
+                    if control_items["tick"] then
+                        control_items["tick"].Rotation = value and 0 or 45
+                        control_items["tick"].ImageTransparency = value and 0 or 1
+                    end
+                    if control_items["toggle_button"] then
+                        control_items["toggle_button"].BackgroundColor3 = value and themes.preset.accent or rgb(67, 67, 68)
+                    end
+                    if control_items["outline"] then
+                        control_items["outline"].BackgroundColor3 = value and themes.preset.accent or rgb(22, 22, 24)
+                    end
+                else
+                    if control_items["toggle_button"] then
+                        control_items["toggle_button"].BackgroundColor3 = value and themes.preset.accent or rgb(58, 58, 62)
+                    end
+                    if control_items["inline"] then
+                        control_items["inline"].BackgroundColor3 = value and themes.preset.accent or rgb(50, 50, 50)
+                    end
+                    if control_items["circle"] then
+                        control_items["circle"].BackgroundColor3 = value and rgb(255, 255, 255) or rgb(86, 86, 88)
+                        control_items["circle"].Position = value and dim2(1, -14, 0, 2) or dim2(0, 2, 0, 2)
+                    end
+                end
+            end
+            local function set_keybind_list_mode(control, value)
+                if not control then
+                    return
+                end
+
+                value = tostring(value or "All")
+                flags[control.flag] = value
+
+                local control_items = control.items
+                if control_items and control_items["sub_text"] then
+                    control_items["sub_text"].Text = value
+                end
+
+                if control.option_instances then
+                    for _, option in control.option_instances do
+                        option.TextColor3 = option.Text == value and themes.preset.accent or rgb(72, 72, 73)
+                    end
+                end
+            end
+            local function sync_keybind_list_controls()
+                set_keybind_list_toggle(keybind_list_enabled, true)
+                set_keybind_list_mode(keybind_list_mode, "All")
+                set_keybind_list_toggle(keybind_list_show_unbound, false)
+                set_keybind_list_toggle(keybind_list_auto_height, true)
+            end
+            library._keybind_list_sync_controls = sync_keybind_list_controls
+            local function force_keybind_list_defaults()
+                local previous_forcing = library._keybind_list_forcing_defaults
+                local previous_syncing = library._keybind_list_syncing_controls
+                library._keybind_list_forcing_defaults = true
+                library._keybind_list_syncing_controls = true
+                sync_keybind_list_controls()
+                library:keybind_list({
+                    enabled = true,
+                    mode = "All",
+                    show_unbound = false,
+                    auto_height = true,
+                    width = library:_keybind_list_option("width", 215),
+                    height = library:_keybind_list_option("max_height", 250),
+                })
+                library._keybind_list_syncing_controls = previous_syncing
+                library._keybind_list_forcing_defaults = previous_forcing
+            end
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
             section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 250), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
             local function guard_keybind_list_setter(flag, control)
@@ -4264,12 +4334,8 @@
                     return
                 end
                 config_flags[flag] = function(value)
-                    local default_value = flag == "keybind_list_show_unbound" and false or true
-                    if value ~= default_value and library._keybind_list_lock_defaults == true and library._keybind_list_user_change ~= true then
-                        local previous_forcing = library._keybind_list_forcing_defaults
-                        library._keybind_list_forcing_defaults = true
-                        raw_set(default_value)
-                        library._keybind_list_forcing_defaults = previous_forcing
+                    if library._keybind_list_lock_defaults == true and library._keybind_list_user_touched ~= true and library._keybind_list_user_change ~= true then
+                        force_keybind_list_defaults()
                     else
                         raw_set(value)
                     end
@@ -4281,11 +4347,8 @@
                     return
                 end
                 config_flags["keybind_list_mode"] = function(value)
-                    if tostring(value) ~= "All" and library._keybind_list_lock_defaults == true and library._keybind_list_user_change ~= true then
-                        local previous_forcing = library._keybind_list_forcing_defaults
-                        library._keybind_list_forcing_defaults = true
-                        raw_set("All")
-                        library._keybind_list_forcing_defaults = previous_forcing
+                    if library._keybind_list_lock_defaults == true and library._keybind_list_user_touched ~= true and library._keybind_list_user_change ~= true then
+                        force_keybind_list_defaults()
                     else
                         raw_set(value)
                     end
@@ -4295,31 +4358,6 @@
             guard_keybind_list_setter("keybind_list_enabled", keybind_list_enabled)
             guard_keybind_list_setter("keybind_list_show_unbound", keybind_list_show_unbound)
             guard_keybind_list_setter("keybind_list_auto_height", keybind_list_auto_height)
-            local function force_keybind_list_defaults()
-                local previous_forcing = library._keybind_list_forcing_defaults
-                library._keybind_list_forcing_defaults = true
-                if keybind_list_enabled and keybind_list_enabled.set then
-                    keybind_list_enabled.set(true)
-                end
-                if keybind_list_show_unbound and keybind_list_show_unbound.set then
-                    keybind_list_show_unbound.set(false)
-                end
-                if keybind_list_auto_height and keybind_list_auto_height.set then
-                    keybind_list_auto_height.set(true)
-                end
-                if keybind_list_mode and keybind_list_mode.set then
-                    keybind_list_mode.set("All")
-                end
-                library:keybind_list({
-                    enabled = true,
-                    mode = "All",
-                    show_unbound = false,
-                    auto_height = true,
-                    width = library:_keybind_list_option("width", 215),
-                    height = library:_keybind_list_option("max_height", 250),
-                })
-                library._keybind_list_forcing_defaults = previous_forcing
-            end
             force_keybind_list_defaults()
         end
     --
