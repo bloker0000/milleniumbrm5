@@ -304,7 +304,7 @@
             return (y_cond and x_cond)
         end
 
-        function library:draggify(frame)
+        function library:draggify(frame, position_callback)
             local dragging = false 
             local start_position = frame.Position
             local start
@@ -346,6 +346,9 @@
                     )
 
                     library:tween(frame, {Position = current_position}, Enum.EasingStyle.Linear, 0.05)
+                    if type(position_callback) == "function" then
+                        position_callback(current_position)
+                    end
                     library:close_element()
                 end
             end)
@@ -886,7 +889,10 @@
                 PaddingBottom = dim(0, 6);
             })
 
-            library:draggify(items["outline"])
+            library:draggify(items["outline"], function(position)
+                list.options.position = position
+                list._user_position = true
+            end)
             return list
         end
 
@@ -1210,12 +1216,12 @@
             if options.background_opacity ~= nil then
                 opts.background_opacity = clamp(tonumber(options.background_opacity) or 1, 0, 1)
             end
-            if options.position then
+            if options.position and list._user_position ~= true then
                 opts.position = options.position
-            elseif options.Position then
+            elseif options.Position and list._user_position ~= true then
                 opts.position = options.Position
             end
-            if (options.position or options.Position) and list.items and list.items["outline"] then
+            if (options.position or options.Position) and list._user_position ~= true and list.items and list.items["outline"] then
                 list.items["outline"].Position = opts.position
             end
 
@@ -1483,7 +1489,10 @@
                     SortOrder = Enum.SortOrder.LayoutOrder;
                 })
 
-                library:draggify(items["outline"])
+                library:draggify(items["outline"], function(position)
+                    info.options.position = position
+                    info._user_position = true
+                end)
                 return info
             end
 
@@ -1894,7 +1903,9 @@
                 end
                 if options.corner ~= nil then
                     opts.corner = tostring(options.corner)
-                    opts.position = nil
+                    if info._user_position ~= true then
+                        opts.position = nil
+                    end
                 end
                 if options.width ~= nil then
                     opts.width = clamp(tonumber(options.width) or opts.width, 110, 400)
@@ -1931,6 +1942,7 @@
                 end
                 if options.position ~= nil then
                     opts.position = options.position
+                    info._user_position = false
                 end
                 if type(options.items) == "table" then
                     for k, v in options.items do
