@@ -5089,10 +5089,10 @@
             local main, menu
 
             if use_external_menu then
-                main = window:tab({name = "Configs", tabs = {"Main"}})
+                main = window:tab({name = "Configs", icon = "rbxassetid://7734052335", tabs = {"Main"}})
             else
                 window:seperator({name = "Settings"})
-                main, menu = window:tab({name = "Configs", tabs = {"Main", "Menu"}})
+                main, menu = window:tab({name = "Configs", icon = "rbxassetid://7734052335", tabs = {"Main", "Menu"}})
                 appearance_page = menu
                 keybind_page = menu
             end
