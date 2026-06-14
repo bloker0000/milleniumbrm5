@@ -458,7 +458,11 @@
             if library._refresh_keybind_list then
                 library:_refresh_keybind_list()
             end
-        end 
+
+            if library._info_list and library._refresh_info_list then
+                library:_refresh_info_list()
+            end
+        end
 
         function library:connection(signal, callback)
             local connection = signal:Connect(callback)
@@ -1132,7 +1136,641 @@
             return list
         end
 
-        function library:unload_menu() 
+        -- Info panel (watermark / live informatics HUD)
+        do
+            local INFO_ORDER = {
+                "fps", "avg_fps", "min_fps", "max_fps", "ping", "memory",
+                "players", "session", "time", "date", "username", "display", "game",
+            }
+
+            local INFO_LABELS = {
+                fps = "FPS",
+                avg_fps = "Avg FPS",
+                min_fps = "Min FPS",
+                max_fps = "Max FPS",
+                ping = "Ping",
+                memory = "Memory",
+                players = "Players",
+                session = "Session",
+                time = "Time",
+                date = "Date",
+                username = "User",
+                display = "Display",
+                game = "Game",
+            }
+
+            local function default_info_options()
+                return {
+                    enabled = true,
+                    corner = "Top Right",
+                    width = 200,
+                    margin = 16,
+                    text_size = 13,
+                    use_accent = true,
+                    show_title = true,
+                    background_opacity = 1,
+                    clock_24h = true,
+                    show_seconds = true,
+                    date_format = "DD/MM/YYYY",
+                    watermark = "MultyHub",
+                    position = nil,
+                    items = {
+                        fps = true, avg_fps = false, min_fps = false, max_fps = false,
+                        ping = true, memory = false, players = false, session = false,
+                        time = true, date = false, username = true, display = false, game = false,
+                    },
+                }
+            end
+
+            function library:_ensure_info_list()
+                local info = library._info_list
+                if not info then
+                    info = {
+                        options = default_info_options(),
+                        items = {},
+                        rows = {},
+                        values = {},
+                        fps_samples = {},
+                        fps_hist = {},
+                        fps_now = 0,
+                        fps_min = nil,
+                        fps_max = nil,
+                        start_clock = os.clock(),
+                        warmup_until = os.clock() + 2,
+                        last_update = 0,
+                        game_name = nil,
+                    }
+                    library._info_list = info
+                end
+                return info
+            end
+
+            function library:_info_position(width, height)
+                local info = library:_ensure_info_list()
+                local opts = info.options
+
+                if opts.position ~= nil then
+                    return opts.position
+                end
+
+                local m = opts.margin or 16
+                local corner = tostring(opts.corner or "Top Right")
+
+                if corner == "Top Left" then
+                    return dim2(0, m, 0, m)
+                elseif corner == "Bottom Left" then
+                    return dim2(0, m, 1, -(height + m))
+                elseif corner == "Bottom Right" then
+                    return dim2(1, -(width + m), 1, -(height + m))
+                end
+
+                return dim2(1, -(width + m), 0, m)
+            end
+
+            function library:_create_info_list()
+                local info = library:_ensure_info_list()
+                local items = info.items
+
+                if items["outline"] then
+                    return info
+                end
+
+                if not library["info_gui"] then
+                    library["info_gui"] = library:create("ScreenGui", {
+                        Parent = coregui;
+                        Name = "multyhub_info";
+                        Enabled = info.options.enabled == true;
+                        ZIndexBehavior = Enum.ZIndexBehavior.Global;
+                        IgnoreGuiInset = true;
+                    })
+                end
+
+                if not library["info_gui"] then
+                    return info
+                end
+
+                items["outline"] = library:create("Frame", {
+                    Parent = library["info_gui"];
+                    Name = "\0";
+                    Position = dim2(1, -216, 0, 16);
+                    Size = dim2(0, info.options.width, 0, 60);
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    BackgroundColor3 = rgb(14, 14, 16);
+                    Visible = info.options.enabled == true;
+                    ClipsDescendants = false;
+                })
+
+                library:create("UICorner", {
+                    Parent = items["outline"];
+                    CornerRadius = dim(0, 8);
+                })
+
+                library:create("UIStroke", {
+                    Parent = items["outline"];
+                    Color = rgb(23, 23, 29);
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+                })
+
+                items["shadow"] = library:create("ImageLabel", {
+                    Parent = items["outline"];
+                    Name = "\0";
+                    Image = "rbxassetid://112971167999062";
+                    ImageColor3 = rgb(0, 0, 0);
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    AnchorPoint = vec2(0.5, 0.5);
+                    Position = dim2(0.5, 0, 0.5, 0);
+                    Size = dim2(1, 62, 1, 62);
+                    ScaleType = Enum.ScaleType.Slice;
+                    SliceScale = 0.75;
+                    SliceCenter = rect(vec2(112, 112), vec2(147, 147));
+                    ZIndex = -1;
+                })
+
+                items["inline"] = library:create("Frame", {
+                    Parent = items["outline"];
+                    Name = "\0";
+                    Position = dim2(0, 1, 0, 1);
+                    Size = dim2(1, -2, 1, -2);
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    BackgroundColor3 = rgb(14, 14, 16);
+                })
+
+                library:create("UICorner", {
+                    Parent = items["inline"];
+                    CornerRadius = dim(0, 8);
+                })
+
+                items["header"] = library:create("Frame", {
+                    Parent = items["inline"];
+                    Name = "\0";
+                    Size = dim2(1, 0, 0, 34);
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    BackgroundTransparency = 1;
+                    BackgroundColor3 = rgb(255, 255, 255);
+                })
+
+                items["title"] = library:create("TextLabel", {
+                    Parent = items["header"];
+                    Name = "\0";
+                    FontFace = fonts.font;
+                    Text = tostring(info.options.watermark or "MultyHub");
+                    TextColor3 = rgb(245, 245, 245);
+                    TextSize = 15;
+                    TextXAlignment = Enum.TextXAlignment.Left;
+                    TextTruncate = Enum.TextTruncate.AtEnd;
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    Position = dim2(0, 10, 0, 0);
+                    Size = dim2(1, -52, 1, 0);
+                    BackgroundColor3 = rgb(255, 255, 255);
+                })
+
+                items["title_accent"] = library:create("TextLabel", {
+                    Parent = items["header"];
+                    Name = "\0";
+                    FontFace = fonts.font;
+                    Text = "INFO";
+                    TextColor3 = themes.preset.accent;
+                    TextSize = 12;
+                    TextXAlignment = Enum.TextXAlignment.Right;
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    Position = dim2(1, -42, 0, 0);
+                    Size = dim2(0, 32, 1, 0);
+                    BackgroundColor3 = rgb(255, 255, 255);
+                }); library:apply_theme(items["title_accent"], "accent", "TextColor3")
+
+                items["line"] = library:create("Frame", {
+                    Parent = items["inline"];
+                    Name = "\0";
+                    Position = dim2(0, 10, 0, 33);
+                    Size = dim2(1, -20, 0, 1);
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    BackgroundColor3 = rgb(21, 21, 23);
+                })
+
+                items["rows"] = library:create("Frame", {
+                    Parent = items["inline"];
+                    Name = "\0";
+                    Position = dim2(0, 0, 0, 36);
+                    Size = dim2(1, 0, 1, -36);
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    BackgroundTransparency = 1;
+                    BackgroundColor3 = rgb(255, 255, 255);
+                })
+
+                items["list"] = library:create("Frame", {
+                    Parent = items["rows"];
+                    Name = "\0";
+                    Position = dim2(0, 10, 0, 4);
+                    Size = dim2(1, -20, 1, -8);
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    BackgroundTransparency = 1;
+                    BackgroundColor3 = rgb(255, 255, 255);
+                })
+
+                library:create("UIListLayout", {
+                    Parent = items["list"];
+                    Padding = dim(0, 3);
+                    SortOrder = Enum.SortOrder.LayoutOrder;
+                })
+
+                library:draggify(items["outline"])
+                return info
+            end
+
+            local function ensure_info_row(info, key)
+                local entry = info.rows[key]
+                if entry then
+                    return entry
+                end
+
+                local row = library:create("Frame", {
+                    Parent = info.items["list"];
+                    Name = "\0";
+                    Size = dim2(1, 0, 0, 18);
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    BackgroundColor3 = rgb(255, 255, 255);
+                })
+
+                local label = library:create("TextLabel", {
+                    Parent = row;
+                    Name = "\0";
+                    FontFace = fonts.font;
+                    Text = INFO_LABELS[key] or key;
+                    TextColor3 = rgb(150, 150, 154);
+                    TextSize = 13;
+                    TextXAlignment = Enum.TextXAlignment.Left;
+                    TextYAlignment = Enum.TextYAlignment.Center;
+                    TextTruncate = Enum.TextTruncate.AtEnd;
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    AnchorPoint = vec2(0, 0.5);
+                    Position = dim2(0, 0, 0.5, 0);
+                    Size = dim2(0.5, -4, 1, 0);
+                    BackgroundColor3 = rgb(255, 255, 255);
+                })
+
+                local value = library:create("TextLabel", {
+                    Parent = row;
+                    Name = "\0";
+                    FontFace = fonts.font;
+                    Text = "-";
+                    TextColor3 = rgb(245, 245, 245);
+                    TextSize = 13;
+                    TextXAlignment = Enum.TextXAlignment.Right;
+                    TextYAlignment = Enum.TextYAlignment.Center;
+                    TextTruncate = Enum.TextTruncate.AtEnd;
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    AnchorPoint = vec2(1, 0.5);
+                    Position = dim2(1, 0, 0.5, 0);
+                    Size = dim2(0.5, -4, 1, 0);
+                    BackgroundColor3 = rgb(255, 255, 255);
+                })
+
+                entry = { row = row, label = label, value = value }
+                info.rows[key] = entry
+                return entry
+            end
+
+            function library:_refresh_info_list()
+                local info = library:_ensure_info_list()
+
+                if not info.items["outline"] then
+                    if not library["info_gui"] and not coregui then
+                        return
+                    end
+                    library:_create_info_list()
+                end
+
+                local opts = info.options
+                local items = info.items
+                if not items["outline"] then
+                    return
+                end
+
+                if library["info_gui"] then
+                    library["info_gui"].Enabled = opts.enabled == true
+                end
+                items["outline"].Visible = opts.enabled == true
+
+                local show_title = opts.show_title ~= false
+                items["header"].Visible = show_title
+                items["line"].Visible = show_title
+                items["title"].Text = tostring(opts.watermark or "MultyHub")
+
+                local bg_t = 1 - clamp(tonumber(opts.background_opacity) or 1, 0, 1)
+                items["inline"].BackgroundTransparency = bg_t
+                items["outline"].BackgroundTransparency = bg_t
+
+                local ts = clamp(tonumber(opts.text_size) or 13, 10, 20)
+                local value_color = opts.use_accent and themes.preset.accent or rgb(245, 245, 245)
+                local order_index = 0
+
+                for _, key in INFO_ORDER do
+                    local enabled = opts.items[key] == true
+                    if enabled then
+                        local entry = ensure_info_row(info, key)
+                        order_index = order_index + 1
+                        entry.row.LayoutOrder = order_index
+                        entry.row.Visible = true
+                        entry.row.Size = dim2(1, 0, 0, max(16, ts + 5))
+                        entry.label.Text = INFO_LABELS[key] or key
+                        entry.label.TextSize = ts
+                        entry.value.TextSize = ts
+                        entry.value.TextColor3 = value_color
+                    else
+                        local entry = info.rows[key]
+                        if entry then
+                            entry.row.Visible = false
+                            entry.row.LayoutOrder = 999
+                        end
+                    end
+                end
+
+                local row_h = max(16, ts + 5)
+                local count = order_index
+                local list_h = count > 0 and (count * row_h + (count - 1) * 3) or 0
+                local header_h = show_title and 36 or 0
+                local top_pad = show_title and 0 or 6
+                local total = header_h + top_pad + list_h + 8
+                local floor_h = show_title and 44 or 24
+                if total < floor_h then
+                    total = floor_h
+                end
+
+                items["rows"].Position = dim2(0, 0, 0, header_h + top_pad)
+                items["rows"].Size = dim2(1, 0, 0, list_h + 8)
+
+                local width = clamp(tonumber(opts.width) or 200, 150, 400)
+                items["outline"].Size = dim2(0, width, 0, total)
+                items["outline"].Position = library:_info_position(width, total)
+            end
+
+            local function set_info_value(info, key, text)
+                local entry = info.rows[key]
+                if not entry then
+                    return
+                end
+                if info.values[key] ~= text then
+                    info.values[key] = text
+                    entry.value.Text = text
+                end
+            end
+
+            function library:_update_info_values()
+                local info = library._info_list
+                if not info or not info.items["outline"] then
+                    return
+                end
+
+                local opts = info.options
+                if opts.enabled ~= true then
+                    return
+                end
+
+                local now = os.clock()
+                local samples = info.fps_samples
+                samples[#samples + 1] = now
+                while samples[1] and samples[1] < now - 1 do
+                    remove(samples, 1)
+                end
+
+                local fps = #samples
+                info.fps_now = fps
+                if now >= info.warmup_until and fps > 0 then
+                    if not info.fps_min or fps < info.fps_min then
+                        info.fps_min = fps
+                    end
+                    if not info.fps_max or fps > info.fps_max then
+                        info.fps_max = fps
+                    end
+                end
+
+                if now - info.last_update < 0.1 then
+                    return
+                end
+                info.last_update = now
+
+                local hist = info.fps_hist
+                hist[#hist + 1] = fps
+                if #hist > 60 then
+                    remove(hist, 1)
+                end
+
+                local items = opts.items
+
+                if items.fps then
+                    set_info_value(info, "fps", tostring(fps))
+                end
+                if items.avg_fps then
+                    local sum = 0
+                    for _, v in hist do
+                        sum = sum + v
+                    end
+                    local avg = #hist > 0 and floor(sum / #hist + 0.5) or fps
+                    set_info_value(info, "avg_fps", tostring(avg))
+                end
+                if items.min_fps then
+                    set_info_value(info, "min_fps", tostring(info.fps_min or fps))
+                end
+                if items.max_fps then
+                    set_info_value(info, "max_fps", tostring(info.fps_max or fps))
+                end
+                if items.ping then
+                    local ping = 0
+                    pcall(function()
+                        ping = floor(stats.Network.ServerStatsItem["Data Ping"]:GetValue() + 0.5)
+                    end)
+                    set_info_value(info, "ping", ping .. "ms")
+                end
+                if items.memory then
+                    local mem = 0
+                    pcall(function()
+                        mem = floor(stats:GetTotalMemoryUsageMb() + 0.5)
+                    end)
+                    set_info_value(info, "memory", mem .. "MB")
+                end
+                if items.players then
+                    local n, mx = 0, 0
+                    pcall(function()
+                        n = #players:GetPlayers()
+                        mx = players.MaxPlayers
+                    end)
+                    set_info_value(info, "players", (mx and mx > 0) and (n .. "/" .. mx) or tostring(n))
+                end
+                if items.session then
+                    local secs = floor(now - info.start_clock)
+                    local h = floor(secs / 3600)
+                    local m = floor((secs % 3600) / 60)
+                    local s = secs % 60
+                    local txt
+                    if h > 0 then
+                        txt = string.format("%d:%02d:%02d", h, m, s)
+                    else
+                        txt = string.format("%02d:%02d", m, s)
+                    end
+                    set_info_value(info, "session", txt)
+                end
+                if items.time then
+                    local fmt
+                    if opts.clock_24h ~= false then
+                        fmt = opts.show_seconds ~= false and "%H:%M:%S" or "%H:%M"
+                    else
+                        fmt = opts.show_seconds ~= false and "%I:%M:%S %p" or "%I:%M %p"
+                    end
+                    local t = tostring(os.date(fmt))
+                    if opts.clock_24h == false then
+                        t = t:gsub("^0", "")
+                    end
+                    set_info_value(info, "time", t)
+                end
+                if items.date then
+                    local fmt = tostring(opts.date_format or "DD/MM/YYYY")
+                    local d
+                    if fmt == "MM/DD/YYYY" then
+                        d = os.date("%m/%d/%Y")
+                    elseif fmt == "YYYY-MM-DD" then
+                        d = os.date("%Y-%m-%d")
+                    elseif fmt == "DD MMM YYYY" then
+                        d = os.date("%d %b %Y")
+                    else
+                        d = os.date("%d/%m/%Y")
+                    end
+                    set_info_value(info, "date", tostring(d))
+                end
+                if items.username then
+                    set_info_value(info, "username", "@" .. tostring(lp.Name))
+                end
+                if items.display then
+                    set_info_value(info, "display", tostring(lp.DisplayName))
+                end
+                if items.game then
+                    set_info_value(info, "game", tostring(info.game_name or "..."))
+                end
+            end
+
+            function library:_start_info_loop()
+                if library._info_render_connection then
+                    return
+                end
+                library._info_render_connection = run.RenderStepped:Connect(function()
+                    library:_update_info_values()
+                end)
+                insert(library.connections, library._info_render_connection)
+            end
+
+            function library:info_list(options)
+                local info = library:_ensure_info_list()
+                local opts = info.options
+                options = options or {}
+
+                if options.enabled ~= nil then
+                    opts.enabled = options.enabled == true
+                end
+                if options.corner ~= nil then
+                    opts.corner = tostring(options.corner)
+                    opts.position = nil
+                end
+                if options.width ~= nil then
+                    opts.width = clamp(tonumber(options.width) or opts.width, 150, 400)
+                end
+                if options.text_size ~= nil then
+                    opts.text_size = clamp(tonumber(options.text_size) or opts.text_size, 10, 20)
+                end
+                if options.use_accent ~= nil then
+                    opts.use_accent = options.use_accent == true
+                end
+                if options.show_title ~= nil then
+                    opts.show_title = options.show_title == true
+                end
+                if options.background_opacity ~= nil then
+                    opts.background_opacity = clamp(tonumber(options.background_opacity) or 1, 0, 1)
+                end
+                if options.clock_24h ~= nil then
+                    opts.clock_24h = options.clock_24h == true
+                end
+                if options.show_seconds ~= nil then
+                    opts.show_seconds = options.show_seconds == true
+                end
+                if options.date_format ~= nil then
+                    opts.date_format = tostring(options.date_format)
+                end
+                if options.watermark ~= nil then
+                    opts.watermark = tostring(options.watermark)
+                end
+                if options.position ~= nil then
+                    opts.position = options.position
+                end
+                if type(options.items) == "table" then
+                    for k, v in options.items do
+                        opts.items[k] = v == true
+                    end
+                end
+
+                library:_create_info_list()
+                library:_refresh_info_list()
+                library:_start_info_loop()
+
+                if not info.game_name and not info._fetching_game then
+                    info._fetching_game = true
+                    task.spawn(function()
+                        local name
+                        local ok = pcall(function()
+                            name = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+                        end)
+                        if ok and name and name ~= "" then
+                            info.game_name = name
+                        else
+                            info.game_name = tostring(game.Name)
+                        end
+                    end)
+                end
+
+                return info
+            end
+
+            function library:set_info_list_watermark(text)
+                local info = library:_ensure_info_list()
+                info.options.watermark = tostring(text)
+                if info.items["title"] then
+                    info.items["title"].Text = info.options.watermark
+                end
+            end
+
+            function library:destroy_info_list()
+                if library._info_render_connection then
+                    pcall(function()
+                        library._info_render_connection:Disconnect()
+                    end)
+                    library._info_render_connection = nil
+                end
+                if library["info_gui"] then
+                    pcall(function()
+                        library["info_gui"]:Destroy()
+                    end)
+                    library["info_gui"] = nil
+                end
+                library._info_list = nil
+            end
+        end
+
+        function library:unload_menu()
             if library[ "items" ] then 
                 library[ "items" ]:Destroy()
             end
@@ -1148,8 +1786,12 @@
             if library[ "keybind_gui" ] then
                 library[ "keybind_gui" ]:Destroy()
             end
-            
-            for index, connection in library.connections do 
+
+            if library[ "info_gui" ] then
+                library[ "info_gui" ]:Destroy()
+            end
+
+            for index, connection in library.connections do
                 connection:Disconnect() 
                 connection = nil 
             end
