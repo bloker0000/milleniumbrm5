@@ -85,6 +85,11 @@
         preset = {
             accent = rgb(100, 220, 200),
         }, 
+        history = {
+            accent = {
+                rgb(100, 220, 200),
+            },
+        },
 
         utility = {
             accent = {
@@ -446,10 +451,46 @@
         function library:update_theme(theme, color)
             local utility = themes.utility[theme]
             local previous = themes.preset[theme]
+            local history = themes.history and themes.history[theme]
+
+            if history then
+                local function remember(theme_color)
+                    if not theme_color then
+                        return
+                    end
+
+                    for _, known in history do
+                        if known == theme_color then
+                            return
+                        end
+                    end
+
+                    insert(history, theme_color)
+                end
+
+                remember(previous)
+                remember(color)
+            end
 
             if not utility then
                 themes.preset[theme] = color
                 return
+            end
+
+            local function is_theme_color(value)
+                if value == previous or value == color then
+                    return true
+                end
+
+                if history then
+                    for _, known in history do
+                        if value == known then
+                            return true
+                        end
+                    end
+                end
+
+                return false
             end
 
             for property_name, property in utility do
@@ -460,7 +501,7 @@
                         return object[property_name]
                     end)
 
-                    if ok and current == previous then
+                    if ok and is_theme_color(current) then
                         local set_ok = pcall(function()
                             object[property_name] = color
                         end)
