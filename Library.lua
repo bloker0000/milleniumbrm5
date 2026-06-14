@@ -517,9 +517,7 @@
                     options[#options + 1] = name
                 end
                 autoload_holder.refresh_options(options)
-                autoload_holder._initializing = true
-                autoload_holder.set(library:get_autoload_config() or "None")
-                autoload_holder._initializing = false
+                library:_brm5_restore_autoload_controls()
             end
         end
 
@@ -527,7 +525,6 @@
             autoload_toggle = toggle_control
             autoload_holder = dropdown_control
             library:update_config_list()
-            library:_brm5_restore_autoload_controls()
         end
 
         function library:get_config()
