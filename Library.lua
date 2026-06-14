@@ -5102,19 +5102,19 @@
             config_holder = section:list({options = {"Report", "This", "Error", "To", "Finobe"}, callback = function(option) end, flag = "config_name_list"}); library:update_config_list()
             
             local column = main:column({})
-            local section = column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
+            local section = column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://7734053495"})
             section:textbox({name = "Config name:", flag = "config_name_text"})
             section:button({name = "Save", callback = function() local cfgName = flags["config_name_text"] or flags["config_name_list"] or "default"; writefile(library.directory .. "/configs/" .. cfgName .. ".cfg", library:get_config()); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Saved config to:\n" .. cfgName}) end})
             section:button({name = "Load", callback = function() local cfgName = flags["config_name_list"] or "default"; local ok, err = pcall(function() library:load_config(readfile(library.directory .. "/configs/" .. cfgName .. ".cfg")) end); if ok then library:update_config_list(); notifications:create_notification({name = "Configs", info = "Loaded config:\n" .. cfgName}) else notifications:create_notification({name = "Configs", info = "Failed to load: " .. cfgName}) end end})
             section:button({name = "Delete", callback = function() local cfgName = flags["config_name_list"] or "default"; pcall(function() delfile(library.directory .. "/configs/" .. cfgName .. ".cfg") end); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. cfgName}) end})
 
             local column = appearance_page:column({})
-            local section = column:section({name = "Appearance", size = 1, default = true, icon = "rbxassetid://129380150574313"})
+                local section = column:section({name = "Appearance", size = 1, default = true, icon = "rbxassetid://7734021595"})
             section:colorpicker({name = "Accent", flag = "menu_accent", color = themes.preset.accent})
             section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function() window.toggle_menu() end, default = true})
 
             local column = keybind_page:column({})
-            local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
+                local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://7733924046"})
             library._keybind_list_lock_defaults = true
             local function update_keybind_list_from_control(options)
                 local previous_user_change = library._keybind_list_user_change
