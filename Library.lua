@@ -83,11 +83,11 @@
 
     local themes = {
         preset = {
-            accent = rgb(100, 220, 200),
+            accent = rgb(138, 154, 91),
         }, 
         history = {
             accent = {
-                rgb(100, 220, 200),
+                rgb(138, 154, 91),
             },
         },
 
