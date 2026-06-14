@@ -386,20 +386,149 @@
         end
 
         local config_holder;
-        function library:update_config_list() 
-            if not config_holder then 
-                return 
-            end
-            
+        local autoload_holder;
+        local autoload_toggle;
+
+        local function autoload_state_path()
+            return library.directory .. "/autoload.txt"
+        end
+
+        local function autoload_list_configs()
             local list = {}
-            
-            for idx, file in listfiles(library.directory .. "/configs") do
-                local name = file:match("[^/\\]+$"):gsub("%.cfg$", "")
-                list[#list + 1] = name
+            local ok = pcall(function()
+                for idx, file in listfiles(library.directory .. "/configs") do
+                    local name = file:match("[^/\\]+$"):gsub("%.cfg$", "")
+                    list[#list + 1] = name
+                end
+            end)
+            if not ok then
+                return {}
+            end
+            return list
+        end
+
+        function library:get_autoload_config()
+            local path = autoload_state_path()
+            if type(isfile) ~= "function" or not isfile(path) then
+                return nil
+            end
+            local ok, name = pcall(readfile, path)
+            if not ok or type(name) ~= "string" then
+                return nil
+            end
+            name = name:gsub("^%s+", ""):gsub("%s+$", "")
+            if name == "" or name == "None" then
+                return nil
+            end
+            return name
+        end
+
+        function library:set_autoload_config(name)
+            local path = autoload_state_path()
+            if type(name) ~= "string" or name == "" or name == "None" then
+                if type(delfile) == "function" and type(isfile) == "function" and isfile(path) then
+                    pcall(delfile, path)
+                elseif type(writefile) == "function" then
+                    pcall(writefile, path, "")
+                end
+                return
+            end
+            if type(writefile) == "function" then
+                pcall(writefile, path, name)
+            end
+        end
+
+        function library:_brm5_sync_autoload()
+            local enabled = flags["config_autoload_enabled"] == true
+            local name = flags["config_autoload_name"]
+            if type(name) == "table" then
+                name = name[1]
+            end
+            name = tostring(name or "")
+            if enabled and name ~= "" and name ~= "None" then
+                library:set_autoload_config(name)
+            else
+                library:set_autoload_config(nil)
+            end
+        end
+
+        function library:_brm5_restore_autoload_controls()
+            local saved = library:get_autoload_config()
+
+            if saved then
+                local exists = false
+                for _, name in next, autoload_list_configs() do
+                    if name == saved then
+                        exists = true
+                        break
+                    end
+                end
+                if not exists then
+                    library:set_autoload_config(nil)
+                    saved = nil
+                end
             end
 
-            config_holder.refresh_options(list)
-        end 
+            if autoload_toggle then
+                autoload_toggle._initializing = true
+                autoload_toggle.set(saved ~= nil)
+                autoload_toggle._initializing = false
+            end
+
+            if autoload_holder then
+                autoload_holder._initializing = true
+                autoload_holder.set(saved or "None")
+                autoload_holder._initializing = false
+            end
+        end
+
+        function library:load_autoload_config()
+            local name = library:get_autoload_config()
+            if not name then
+                return nil
+            end
+            local path = library.directory .. "/configs/" .. name .. ".cfg"
+            if type(isfile) ~= "function" or not isfile(path) then
+                return nil
+            end
+            local ok, data = pcall(readfile, path)
+            if not ok or type(data) ~= "string" or data == "" then
+                return nil
+            end
+            local loaded = pcall(function()
+                library:load_config(data)
+            end)
+            if loaded then
+                return name
+            end
+            return nil
+        end
+
+        function library:update_config_list()
+            local list = autoload_list_configs()
+
+            if config_holder then
+                config_holder.refresh_options(list)
+            end
+
+            if autoload_holder then
+                local options = {"None"}
+                for _, name in next, list do
+                    options[#options + 1] = name
+                end
+                autoload_holder.refresh_options(options)
+                autoload_holder._initializing = true
+                autoload_holder.set(library:get_autoload_config() or "None")
+                autoload_holder._initializing = false
+            end
+        end
+
+        function library:_brm5_register_autoload_controls(toggle_control, dropdown_control)
+            autoload_toggle = toggle_control
+            autoload_holder = dropdown_control
+            library:update_config_list()
+            library:_brm5_restore_autoload_controls()
+        end
 
         function library:get_config()
             local Config = {}
@@ -5161,6 +5290,11 @@
             section:button({name = "Save", callback = function() local cfgName = flags["config_name_text"] or flags["config_name_list"] or "default"; writefile(library.directory .. "/configs/" .. cfgName .. ".cfg", library:get_config()); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Saved config to:\n" .. cfgName}) end})
             section:button({name = "Load", callback = function() local cfgName = flags["config_name_list"] or "default"; local ok, err = pcall(function() library:load_config(readfile(library.directory .. "/configs/" .. cfgName .. ".cfg")) end); if ok then library:update_config_list(); notifications:create_notification({name = "Configs", info = "Loaded config:\n" .. cfgName}) else notifications:create_notification({name = "Configs", info = "Failed to load: " .. cfgName}) end end})
             section:button({name = "Delete", callback = function() local cfgName = flags["config_name_list"] or "default"; pcall(function() delfile(library.directory .. "/configs/" .. cfgName .. ".cfg") end); library:update_config_list(); notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. cfgName}) end})
+
+            local autoload_section = column:section({name = "Auto Load", side = "right", size = 1, default = true, icon = "rbxassetid://7734053039"})
+            local autoload_enabled_control = autoload_section:toggle({name = "Auto Load on Start", flag = "config_autoload_enabled", default = false, seperator = true, callback = function() library:_brm5_sync_autoload() end, info = "Loads the selected config automatically each time the script runs."})
+            local autoload_name_control = autoload_section:dropdown({name = "Config", flag = "config_autoload_name", items = {"None"}, default = "None", callback = function() library:_brm5_sync_autoload() end})
+            library:_brm5_register_autoload_controls(autoload_enabled_control, autoload_name_control)
 
             local column = appearance_page:column({})
                 local section = column:section({name = "Appearance", size = 1, default = true, icon = "rbxassetid://7734021595"})
