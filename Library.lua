@@ -165,8 +165,59 @@
         
     library.__index = library
 
-    for _, path in next, library.folders do 
-        makefolder(library.directory .. path)
+    local http_request_fn = request or http_request
+    if not http_request_fn and type(syn) == "table" then
+        http_request_fn = syn.request
+    end
+    if not http_request_fn and type(http) == "table" then
+        http_request_fn = http.request
+    end
+
+    local function http_get(url)
+        local ok, result = pcall(function()
+            return game:HttpGet(url)
+        end)
+        if ok and type(result) == "string" and result ~= "" then
+            return result
+        end
+
+        ok, result = pcall(function()
+            return game:HttpGetAsync(url)
+        end)
+        if ok and type(result) == "string" and result ~= "" then
+            return result
+        end
+
+        if type(http_request_fn) == "function" then
+            ok, result = pcall(http_request_fn, {
+                Url = url,
+                Method = "GET",
+                Headers = {
+                    ["User-Agent"] = "Mozilla/5.0",
+                    Accept = "text/plain,*/*",
+                },
+            })
+            if ok then
+                if type(result) == "string" and result ~= "" then
+                    return result
+                end
+                if type(result) == "table" then
+                    local status = result.StatusCode or result.Status or result.status_code
+                    local body = result.Body or result.body
+                    if result.Success ~= false and (type(status) ~= "number" or status >= 200 and status < 300) and type(body) == "string" and body ~= "" then
+                        return body
+                    end
+                end
+            end
+        end
+
+        return nil
+    end
+
+    if type(makefolder) == "function" then
+        for _, path in next, library.folders do 
+            pcall(makefolder, library.directory .. path)
+        end
     end
 
     local flags = library.flags 
@@ -175,44 +226,71 @@
 
     local fonts = {}; do
         function Register_Font(Name, Weight, Style, Asset)
-            if not isfile(Asset.Id) then
-                writefile(Asset.Id, Asset.Font)
+            if type(isfile) ~= "function" or type(writefile) ~= "function" or type(getcustomasset) ~= "function" then
+                return nil
             end
 
-            if isfile(Name .. ".font") then
-                delfile(Name .. ".font")
-            end
+            local ok, result = pcall(function()
+                if not isfile(Asset.Id) then
+                    writefile(Asset.Id, Asset.Font)
+                end
 
-            local Data = {
-                name = Name,
-                faces = {
-                    {
-                        name = "Normal",
-                        weight = Weight,
-                        style = Style,
-                        assetId = getcustomasset(Asset.Id),
+                if type(delfile) == "function" and isfile(Name .. ".font") then
+                    delfile(Name .. ".font")
+                end
+
+                local Data = {
+                    name = Name,
+                    faces = {
+                        {
+                            name = "Normal",
+                            weight = Weight,
+                            style = Style,
+                            assetId = getcustomasset(Asset.Id),
+                        },
                     },
-                },
-            }
+                }
 
-            writefile(Name .. ".font", http_service:JSONEncode(Data))
+                writefile(Name .. ".font", http_service:JSONEncode(Data))
 
-            return getcustomasset(Name .. ".font");
+                return getcustomasset(Name .. ".font");
+            end)
+
+            if ok then
+                return result
+            end
+
+            return nil
         end
         
         local Medium = Register_Font("Medium", 200, "Normal", {
             Id = "Medium.ttf",
-            Font = game:HttpGet("https://github.com/bloker0000/milleniumbrm5/raw/refs/heads/main/Inter_28pt-Medium.ttf"),
+            Font = http_get("https://github.com/bloker0000/milleniumbrm5/raw/refs/heads/main/Inter_28pt-Medium.ttf"),
         })
 
         local SemiBold = Register_Font("SemiBold", 200, "Normal", {
             Id = "SemiBold.ttf",
-            Font = game:HttpGet("https://github.com/bloker0000/milleniumbrm5/raw/refs/heads/main/Inter_28pt-SemiBold.ttf"),
+            Font = http_get("https://github.com/bloker0000/milleniumbrm5/raw/refs/heads/main/Inter_28pt-SemiBold.ttf"),
         })
 
+        local small = Font.fromEnum(Enum.Font.Gotham)
+        local font = Font.fromEnum(Enum.Font.GothamBold)
+        if Medium then
+            local ok, result = pcall(Font.new, Medium, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+            if ok then
+                small = result
+            end
+        end
+        if SemiBold then
+            local ok, result = pcall(Font.new, SemiBold, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+            if ok then
+                font = result
+            end
+        end
+
         fonts = {
-            small = Font.new(Medium, Enum.FontWeight.Regular, Enum.FontStyle.Normal);
-            font = Font.new(SemiBold, Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+            small = small;
+            font = font;
         }
     end
 --
