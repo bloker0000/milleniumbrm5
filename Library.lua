@@ -165,11 +165,11 @@
         
     library.__index = library
 
-    local http_request_fn = request or http_request
-    if not http_request_fn and type(syn) == "table" then
+    local http_request_fn = type(request) == "function" and request or type(http_request) == "function" and http_request or nil
+    if not http_request_fn and type(syn) == "table" and type(syn.request) == "function" then
         http_request_fn = syn.request
     end
-    if not http_request_fn and type(http) == "table" then
+    if not http_request_fn and type(http) == "table" and type(http.request) == "function" then
         http_request_fn = http.request
     end
 
