@@ -2456,7 +2456,21 @@
     
     -- Library element functions
         function library:window(properties)
-            local cfg = { 
+            library._search_index = {}
+            library._search_pages = {}
+            library._search_result_pool = {}
+            library._menu_search_built = false
+
+            if library._scroll_fade_conn then
+                pcall(function()
+                    library._scroll_fade_conn:Disconnect()
+                end)
+                library._scroll_fade_conn = nil
+            end
+            library._scroll_fades = {}
+            library._active_subtab_holder = nil
+
+            local cfg = {
                 suffix = properties.suffix or properties.Suffix or "tech";
                 name = properties.name or properties.Name or "nebula";
                 game_name = properties.gameInfo or properties.game_info or properties.GameInfo or "Milenium for Counter-Strike: Global Offensive";
@@ -2513,7 +2527,28 @@
                     Parent = items[ "main" ];
                     ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                 });
-                
+
+                do -- Smooth window entrance
+                    if library._window_intro_scale then
+                        pcall(function() library._window_intro_scale:Destroy() end)
+                        library._window_intro_scale = nil
+                    end
+
+                    library._window_intro_scale = library:create("UIScale", {
+                        Parent = items[ "main" ];
+                        Scale = 0.96;
+                    })
+                    library._window_main_stroke.Transparency = 1
+
+                    task.spawn(function()
+                        run.RenderStepped:Wait()
+                        pcall(function()
+                            library:tween(library._window_intro_scale, { Scale = 1 }, Enum.EasingStyle.Quint, 0.45)
+                            library:tween(library._window_main_stroke, { Transparency = 0 }, Enum.EasingStyle.Quint, 0.45)
+                        end)
+                    end)
+                end
+
                 items[ "side_frame" ] = library:create( "Frame" , {
                     Parent = items[ "main" ];
                     BackgroundTransparency = 1;
@@ -2704,10 +2739,18 @@
                 library._window_footer_label = items[ "other_info" ]
             end
 
+            pcall(function()
+                library:_create_menu_search(items)
+            end)
+
+            pcall(function()
+                library:_setup_scroll_indicators(items)
+            end)
+
             do -- Other
                 library:draggify(items[ "main" ])
                 library:resizify(items[ "main" ])
-            end 
+            end
 
             function cfg.toggle_menu(bool) 
                 -- WIP 
@@ -2823,15 +2866,20 @@
                 -- 
 
                 -- Multi Sections
-                    items[ "multi_section_button_holder" ] = library:create( "Frame" , {
+                    items[ "multi_section_button_holder" ] = library:create( "ScrollingFrame" , {
                         Parent = library.cache;
                         BackgroundTransparency = 1;
                         Name = "\0";
                         Visible = false;
                         BorderColor3 = rgb(0, 0, 0);
-                        Size = dim2(1, 0, 1, 0);
+                        Size = dim2(1, -(library.search_reserve or 224), 1, 0);
                         BorderSizePixel = 0;
-                        BackgroundColor3 = rgb(255, 255, 255)
+                        BackgroundColor3 = rgb(255, 255, 255);
+                        ScrollBarThickness = 0;
+                        CanvasSize = dim2(0, 0, 0, 0);
+                        AutomaticCanvasSize = Enum.AutomaticSize.X;
+                        ScrollingDirection = Enum.ScrollingDirection.X;
+                        ClipsDescendants = true
                     });
                     
                     library:create( "UIListLayout" , {
@@ -3006,7 +3054,11 @@
 						end)
 
 						cfg.pages[#cfg.pages + 1] = setmetatable(data, library)
-                    end 
+
+                        if library._search_add_page then
+                            library:_search_add_page(data.page, data, cfg, cfg.name, section)
+                        end
+                    end
 
                     cfg.pages[1].open_page()
                 --
@@ -3040,8 +3092,9 @@
                 
                 items[ "tab_holder" ].Visible = true 
                 items[ "tab_holder" ].Parent = self.items[ "main" ]
-                items[ "multi_section_button_holder" ].Visible = true 
+                items[ "multi_section_button_holder" ].Visible = true
                 items[ "multi_section_button_holder" ].Parent = self.items[ "multi_holder" ]
+                library._active_subtab_holder = items[ "multi_section_button_holder" ]
 
                 self.selected_tab = {
                     items[ "button" ];
@@ -6816,5 +6869,755 @@
         end
     --
 -- 
+do -- Menu Search
+    local SEARCH_BAR_WIDTH = 200
+    local SEARCH_RESERVE = SEARCH_BAR_WIDTH + 24
+    local RESULT_HEIGHT = 32
+    local MAX_VISIBLE = 7
+    local MAX_RESULTS = 40
+
+    library._search_index = library._search_index or {}
+    library._search_pages = library._search_pages or {}
+    library._search_result_pool = library._search_result_pool or {}
+
+    library.search_reserve = SEARCH_RESERVE
+
+    local function trim(s)
+        return (tostring(s):gsub("^%s+", ""):gsub("%s+$", ""))
+    end
+
+    local function fuzzy_score(q, text)
+        local qlen = #q
+        if qlen == 0 then
+            return 0
+        end
+        local tlen = #text
+        if tlen < qlen then
+            return nil
+        end
+
+        local substr = string.find(text, q, 1, true)
+
+        local qi, ti = 1, 1
+        local score, run = 0, 0
+        local last_byte, first_match
+        while ti <= tlen and qi <= qlen do
+            local tb = string.byte(text, ti)
+            if tb == string.byte(q, qi) then
+                local bonus = 0
+                if ti == 1 then
+                    bonus = bonus + 12
+                end
+                if last_byte == 32 or last_byte == 95 or last_byte == 45 then
+                    bonus = bonus + 9
+                end
+                if run > 0 then
+                    bonus = bonus + run * 4
+                end
+                score = score + 6 + bonus
+                run = run + 1
+                if not first_match then
+                    first_match = ti
+                end
+                qi = qi + 1
+            else
+                run = 0
+            end
+            last_byte = tb
+            ti = ti + 1
+        end
+
+        if qi <= qlen then
+            return nil
+        end
+
+        if substr then
+            score = score + 45
+            if substr == 1 then
+                score = score + 35
+            end
+        end
+        score = score - (tlen - qlen) * 0.2
+        score = score - ((first_match or 1) - 1) * 0.5
+        return score
+    end
+
+    function library:_search_add(section, control, options)
+        if type(section) ~= "table" or type(control) ~= "table" then
+            return
+        end
+        local elements = section.items and section.items["elements"]
+        if not elements then
+            return
+        end
+        local name = control.name
+        if type(name) ~= "string" and type(options) == "table" then
+            name = options.name or options.Name
+        end
+        if type(name) ~= "string" or name == "" then
+            return
+        end
+        local root
+        for _, inst in next, (control.items or {}) do
+            if typeof(inst) == "Instance" and inst.Parent == elements then
+                root = inst
+                break
+            end
+        end
+        if not root then
+            return
+        end
+        library._search_index[#library._search_index + 1] = {
+            name = name,
+            lname = string.lower(name),
+            row = root,
+        }
+    end
+
+    function library:_search_add_page(scroll, page, tab_cfg, tab_name, sub_name)
+        if typeof(scroll) ~= "Instance" then
+            return
+        end
+        library._search_pages[#library._search_pages + 1] = {
+            scroll = scroll,
+            page = page,
+            tab_cfg = tab_cfg,
+            tab_name = tab_name or "",
+            sub_name = sub_name or "",
+        }
+    end
+
+    local function resolve_entry_page(entry)
+        if entry._resolved then
+            return entry._page
+        end
+        entry._resolved = true
+        local row = entry.row
+        if typeof(row) == "Instance" and row.Parent then
+            for _, pg in next, library._search_pages do
+                if pg.scroll and row:IsDescendantOf(pg.scroll) then
+                    entry._page = pg
+                    break
+                end
+            end
+        end
+        return entry._page
+    end
+
+    local flash_frame
+    local function flash_row(row)
+        if typeof(row) ~= "Instance" then
+            return
+        end
+        if not flash_frame then
+            flash_frame = library:create("Frame", {
+                Name = "\0";
+                BorderSizePixel = 0;
+                BackgroundColor3 = themes.preset.accent;
+                BackgroundTransparency = 1;
+                ZIndex = 8;
+            })
+            library:create("UICorner", { Parent = flash_frame; CornerRadius = dim(0, 6) })
+        end
+        flash_frame.BackgroundColor3 = themes.preset.accent
+        flash_frame.Parent = row
+        flash_frame.Size = dim2(1, 6, 1, 6)
+        flash_frame.Position = dim2(0, -3, 0, -3)
+        flash_frame.BackgroundTransparency = 0.65
+        library:tween(flash_frame, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad, 0.85)
+    end
+
+    function library:_search_navigate(entry)
+        local pg = resolve_entry_page(entry)
+        if not pg then
+            return
+        end
+        pcall(function()
+            if pg.tab_cfg and pg.tab_cfg.open_tab then
+                pg.tab_cfg.open_tab()
+            end
+            if pg.page and pg.page.open_page then
+                pg.page.open_page()
+            end
+        end)
+
+        task.spawn(function()
+            local scroll = pg.scroll
+            local row = entry.row
+            for _ = 1, 3 do
+                task.wait()
+            end
+            if typeof(scroll) ~= "Instance" or typeof(row) ~= "Instance" or not row.Parent then
+                return
+            end
+            local rel = row.AbsolutePosition.Y - scroll.AbsolutePosition.Y + scroll.CanvasPosition.Y
+            local max_y = math.max(0, scroll.AbsoluteCanvasSize.Y - scroll.AbsoluteWindowSize.Y)
+            local target = math.clamp(rel - 14, 0, max_y)
+            library:tween(scroll, { CanvasPosition = vec2(0, target) }, Enum.EasingStyle.Quad, 0.28)
+            task.wait(0.18)
+            flash_row(row)
+        end)
+    end
+
+    function library:_create_menu_search(items)
+        if not items or not items["multi_holder"] or not items["main"] then
+            return
+        end
+        if library._menu_search_built then
+            return
+        end
+        library._menu_search_built = true
+
+        local search = {}
+
+        search.bar = library:create("Frame", {
+            Parent = items["multi_holder"];
+            Name = "\0";
+            AnchorPoint = vec2(1, 0.5);
+            Position = dim2(1, -10, 0.5, 1);
+            Size = dim2(0, SEARCH_BAR_WIDTH, 0, 32);
+            BorderSizePixel = 0;
+            BackgroundColor3 = rgb(20, 20, 23);
+        })
+        library:create("UICorner", { Parent = search.bar; CornerRadius = dim(0, 7) })
+        search.stroke = library:create("UIStroke", {
+            Parent = search.bar;
+            Color = rgb(34, 34, 40);
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        })
+
+        search.icon = library:create("ImageLabel", {
+            Parent = search.bar;
+            Name = "\0";
+            AnchorPoint = vec2(0, 0.5);
+            Position = dim2(0, 9, 0.5, 0);
+            Size = dim2(0, 15, 0, 15);
+            BackgroundTransparency = 1;
+            Image = "rbxassetid://3926305904";
+            ImageRectOffset = vec2(964, 324);
+            ImageRectSize = vec2(36, 36);
+            ImageColor3 = rgb(72, 72, 73);
+        })
+
+        search.input = library:create("TextBox", {
+            Parent = search.bar;
+            Name = "\0";
+            AnchorPoint = vec2(0, 0.5);
+            Position = dim2(0, 32, 0.5, 0);
+            Size = dim2(1, -42, 1, 0);
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            FontFace = fonts.font;
+            Text = "";
+            PlaceholderText = "Search";
+            PlaceholderColor3 = rgb(80, 80, 84);
+            TextColor3 = rgb(200, 200, 200);
+            TextXAlignment = Enum.TextXAlignment.Left;
+            TextSize = 14;
+            ClearTextOnFocus = false;
+            TextTruncate = Enum.TextTruncate.AtEnd;
+        })
+
+        search.results = library:create("ScrollingFrame", {
+            Parent = items["main"];
+            Name = "\0";
+            AnchorPoint = vec2(1, 0);
+            Position = dim2(1, -10, 0, 60);
+            Size = dim2(0, 272, 0, 0);
+            BackgroundColor3 = rgb(18, 18, 21);
+            BorderSizePixel = 0;
+            Visible = false;
+            ZIndex = 6;
+            ClipsDescendants = true;
+            ScrollBarThickness = 3;
+            ScrollBarImageColor3 = rgb(44, 44, 46);
+            CanvasSize = dim2(0, 0, 0, 0);
+            ScrollingDirection = Enum.ScrollingDirection.Y;
+        })
+        library:create("UICorner", { Parent = search.results; CornerRadius = dim(0, 8) })
+        library:create("UIStroke", {
+            Parent = search.results;
+            Color = rgb(34, 34, 40);
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        })
+        library:create("UIListLayout", {
+            Parent = search.results;
+            Padding = dim(0, 0);
+            SortOrder = Enum.SortOrder.LayoutOrder;
+        })
+        library:create("UIPadding", {
+            Parent = search.results;
+            PaddingTop = dim(0, 4);
+            PaddingBottom = dim(0, 4);
+            PaddingLeft = dim(0, 4);
+            PaddingRight = dim(0, 4);
+        })
+
+        library._menu_search = search
+        local results_hovered = false
+        local current = {}
+
+        local function hide_results()
+            search.results.Visible = false
+        end
+
+        local function acquire_row(i)
+            local pool = library._search_result_pool
+            local row = pool[i]
+            if row then
+                return row
+            end
+            row = {}
+            row.button = library:create("TextButton", {
+                Parent = search.results;
+                Name = "\0";
+                Size = dim2(1, 0, 0, RESULT_HEIGHT);
+                BackgroundColor3 = rgb(26, 26, 30);
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                AutoButtonColor = false;
+                Text = "";
+                ZIndex = 7;
+                LayoutOrder = i;
+            })
+            library:create("UICorner", { Parent = row.button; CornerRadius = dim(0, 6) })
+            row.name = library:create("TextLabel", {
+                Parent = row.button;
+                Name = "\0";
+                AnchorPoint = vec2(0, 0.5);
+                Position = dim2(0, 9, 0.5, 0);
+                Size = dim2(0.62, 0, 1, 0);
+                BackgroundTransparency = 1;
+                FontFace = fonts.font;
+                Text = "";
+                TextColor3 = rgb(228, 228, 232);
+                TextXAlignment = Enum.TextXAlignment.Left;
+                TextTruncate = Enum.TextTruncate.AtEnd;
+                TextSize = 14;
+                ZIndex = 8;
+            })
+            row.path = library:create("TextLabel", {
+                Parent = row.button;
+                Name = "\0";
+                AnchorPoint = vec2(1, 0.5);
+                Position = dim2(1, -9, 0.5, 0);
+                Size = dim2(0.36, 0, 1, 0);
+                BackgroundTransparency = 1;
+                FontFace = fonts.font;
+                Text = "";
+                TextColor3 = rgb(96, 96, 100);
+                TextXAlignment = Enum.TextXAlignment.Right;
+                TextTruncate = Enum.TextTruncate.AtEnd;
+                TextSize = 12;
+                ZIndex = 8;
+            })
+            row.button.MouseEnter:Connect(function()
+                if row._active then
+                    library:tween(row.button, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quad, 0.12)
+                end
+            end)
+            row.button.MouseLeave:Connect(function()
+                library:tween(row.button, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad, 0.12)
+            end)
+            row.button.MouseButton1Down:Connect(function()
+                if row._active and row._entry then
+                    library:_search_navigate(row._entry)
+                    hide_results()
+                end
+            end)
+            pool[i] = row
+            return row
+        end
+
+        local function render(matches)
+            local shown = math.min(#matches, MAX_RESULTS)
+            local pool = library._search_result_pool
+            for i = 1, shown do
+                local entry = matches[i].entry
+                local row = acquire_row(i)
+                local pg = resolve_entry_page(entry)
+                row._entry = entry
+                row._active = true
+                row.name.Text = entry.name
+                if pg then
+                    local crumb = pg.tab_name
+                    if pg.sub_name ~= nil and pg.sub_name ~= "" then
+                        crumb = crumb .. "  ›  " .. pg.sub_name
+                    end
+                    row.path.Text = crumb
+                else
+                    row.path.Text = ""
+                end
+                row.button.BackgroundTransparency = 1
+                row.button.Visible = true
+            end
+            for i = shown + 1, #pool do
+                local row = pool[i]
+                if row then
+                    row._entry = nil
+                    row._active = false
+                    row.button.Visible = false
+                end
+            end
+
+            if shown == 0 then
+                hide_results()
+                return
+            end
+
+            local visible = math.min(shown, MAX_VISIBLE)
+            search.results.Size = dim2(0, 272, 0, visible * RESULT_HEIGHT + 8)
+            search.results.CanvasSize = dim2(0, 0, 0, shown * RESULT_HEIGHT + 8)
+            search.results.CanvasPosition = vec2(0, 0)
+            search.results.Visible = true
+        end
+
+        local function do_search(text)
+            local query = string.lower(trim(text))
+            current = {}
+            if query == "" then
+                hide_results()
+                return
+            end
+            local index = library._search_index
+            local matches = current
+            for i = 1, #index do
+                local e = index[i]
+                local s = fuzzy_score(query, e.lname)
+                if s then
+                    matches[#matches + 1] = { entry = e, score = s }
+                end
+            end
+            table.sort(matches, function(a, b)
+                if a.score == b.score then
+                    return a.entry.lname < b.entry.lname
+                end
+                return a.score > b.score
+            end)
+            render(matches)
+        end
+
+        search.input:GetPropertyChangedSignal("Text"):Connect(function()
+            do_search(search.input.Text)
+        end)
+
+        search.input.Focused:Connect(function()
+            library:tween(search.stroke, { Color = themes.preset.accent }, Enum.EasingStyle.Quad, 0.15)
+            library:tween(search.icon, { ImageColor3 = themes.preset.accent }, Enum.EasingStyle.Quad, 0.15)
+            if trim(search.input.Text) ~= "" then
+                do_search(search.input.Text)
+            end
+        end)
+
+        search.input.FocusLost:Connect(function(enter)
+            library:tween(search.stroke, { Color = rgb(34, 34, 40) }, Enum.EasingStyle.Quad, 0.15)
+            library:tween(search.icon, { ImageColor3 = rgb(72, 72, 73) }, Enum.EasingStyle.Quad, 0.15)
+            if enter then
+                local top = current[1]
+                if top then
+                    library:_search_navigate(top.entry)
+                end
+                hide_results()
+                return
+            end
+            task.delay(0.12, function()
+                if not results_hovered then
+                    hide_results()
+                end
+            end)
+        end)
+
+        search.results.MouseEnter:Connect(function()
+            results_hovered = true
+        end)
+        search.results.MouseLeave:Connect(function()
+            results_hovered = false
+        end)
+    end
+
+    local CONTROL_METHODS = { "toggle", "slider", "dropdown", "label", "colorpicker", "textbox", "keybind", "button" }
+    for _, mname in next, CONTROL_METHODS do
+        local original = library[mname]
+        if type(original) == "function" then
+            library[mname] = function(self, options, ...)
+                local results = table.pack(original(self, options, ...))
+                pcall(function()
+                    library:_search_add(self, results[1], options)
+                end)
+                return table.unpack(results, 1, results.n)
+            end
+        end
+    end
+end
+
+do -- Scroll Indicators
+    library._scroll_fades = library._scroll_fades or {}
+    library._scroll_fade_items = library._scroll_fade_items or setmetatable({}, { __mode = "k" })
+
+    function library:_make_fade(parent, axis, edge)
+        local horizontal = axis == "x"
+        local at_start = edge == "start"
+        local anchor, pos, size, line_pos, line_size, line_anchor, fade_pos, fade_anchor, fade_rotation
+        local fade_full, fade_hidden, line_full, line_hidden
+
+        if horizontal then
+            size = dim2(0, 18, 1, -16)
+            line_size = dim2(0, 1, 1, 0)
+            line_full = line_size
+            line_hidden = dim2(0, 1, 0, 0)
+            line_anchor = vec2(0, 0.5)
+            line_pos = dim2(at_start and 0 or 1, at_start and 0 or -1, 0.5, 0)
+            fade_full = dim2(1, 0, 1, 0)
+            fade_hidden = dim2(1, 0, 0, 0)
+            fade_anchor = vec2(0, 0.5)
+            fade_pos = dim2(0, 0, 0.5, 0)
+            fade_rotation = at_start and 0 or 180
+            if at_start then
+                anchor = vec2(0, 0)
+                pos = dim2(0, 0, 0, 8)
+            else
+                anchor = vec2(1, 0)
+                pos = dim2(1, -(library.search_reserve or 224), 0, 8)
+            end
+        else
+            size = dim2(1, -28, 0, 16)
+            line_size = dim2(1, 0, 0, 1)
+            line_full = line_size
+            line_hidden = dim2(0, 0, 0, 1)
+            line_anchor = vec2(0.5, 0)
+            line_pos = dim2(0.5, 0, at_start and 0 or 1, at_start and 0 or -1)
+            fade_full = dim2(1, 0, 1, 0)
+            fade_hidden = dim2(0, 0, 1, 0)
+            fade_anchor = vec2(0.5, 0)
+            fade_pos = dim2(0.5, 0, 0, 0)
+            fade_rotation = at_start and 90 or 270
+            if at_start then
+                anchor = vec2(0, 0)
+                pos = dim2(0, 14, 0, 60)
+            else
+                anchor = vec2(0, 1)
+                pos = dim2(0, 14, 1, 0)
+            end
+        end
+
+        local group = library:create("CanvasGroup", {
+            Parent = parent;
+            Name = "\0";
+            AnchorPoint = anchor;
+            Position = pos;
+            Size = size;
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            ZIndex = 5;
+            Active = false;
+            GroupTransparency = 1;
+            Visible = false;
+        })
+
+        local fade = library:create("Frame", {
+            Parent = group;
+            Name = "\0";
+            AnchorPoint = fade_anchor;
+            Position = fade_pos;
+            Size = fade_full;
+            BackgroundColor3 = themes.preset.accent;
+            BackgroundTransparency = 0.88;
+            BorderSizePixel = 0;
+            ZIndex = 5;
+            Active = false;
+        }); library:apply_theme(fade, "accent", "BackgroundColor3")
+
+        library:create("UIGradient", {
+            Parent = fade;
+            Rotation = fade_rotation;
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(0.35, 0.6),
+                NumberSequenceKeypoint.new(1, 1),
+            });
+        })
+
+        library._scroll_fade_items[group] = {
+            fade = fade,
+            fade_full = fade_full,
+            fade_hidden = fade_hidden,
+        }
+
+        return group
+    end
+
+    function library:_register_scroll_fade(frame, axis, edge, getter)
+        if not frame then
+            return
+        end
+        frame.GroupTransparency = 1
+        frame.Visible = false
+        local items = library._scroll_fade_items and library._scroll_fade_items[frame]
+        if items then
+            if items.fade then
+                items.fade.Size = items.fade_hidden
+            end
+            if items.line then
+                items.line.Size = items.line_hidden
+            end
+        end
+        library._scroll_fades[#library._scroll_fades + 1] = {
+            frame = frame,
+            items = items,
+            axis = axis,
+            edge = edge,
+            get = getter,
+            active = false,
+            anim_id = 0,
+            active_t = 0,
+        }
+    end
+
+    local function edge_active(scroll, axis, edge)
+        if typeof(scroll) ~= "Instance" or not scroll.Parent then
+            return false
+        end
+        local pos = scroll.CanvasPosition
+        local canvas = scroll.AbsoluteCanvasSize
+        local window = scroll.AbsoluteWindowSize
+        if axis == "x" then
+            local max_x = canvas.X - window.X
+            if max_x <= 1 then
+                return false
+            end
+            if edge == "start" then
+                return pos.X > 2
+            end
+            return pos.X < max_x - 2
+        else
+            local max_y = canvas.Y - window.Y
+            if max_y <= 1 then
+                return false
+            end
+            if edge == "start" then
+                return pos.Y > 2
+            end
+            return pos.Y < max_y - 2
+        end
+    end
+
+    function library:_start_scroll_fade_loop()
+        if library._scroll_fade_conn then
+            return
+        end
+        library._scroll_fade_conn = run.RenderStepped:Connect(function()
+            local gui = library["items"]
+            if not gui or not gui.Enabled then
+                return
+            end
+            local fades = library._scroll_fades
+            for i = 1, #fades do
+                local e = fades[i]
+                local frame = e.frame
+                if frame and frame.Parent then
+                    local scroll = e.get and e.get() or nil
+                    local active = edge_active(scroll, e.axis, e.edge)
+                    if active ~= e.active then
+                        e.active = active
+                        e.anim_id = (e.anim_id or 0) + 1
+                        local anim_id = e.anim_id
+                        if e.tweens then
+                            for t = 1, #e.tweens do
+                                local tw = e.tweens[t]
+                                if tw then
+                                    pcall(function()
+                                        tw:Cancel()
+                                    end)
+                                end
+                            end
+                            e.tweens = nil
+                        elseif e.tween then
+                            pcall(function()
+                                e.tween:Cancel()
+                            end)
+                            e.tween = nil
+                        end
+
+                        if active then
+                            frame.Visible = true
+                        end
+
+                        local info = TweenInfo.new(active and 0.2 or 0.18, Enum.EasingStyle.Quint, active and Enum.EasingDirection.Out or Enum.EasingDirection.In)
+                        e.tweens = {
+                            tween_service:Create(frame, info, {
+                                GroupTransparency = active and (e.active_t or 0) or 1,
+                            }),
+                        }
+                        if e.items then
+                            if e.items.fade then
+                                e.tweens[#e.tweens + 1] = tween_service:Create(e.items.fade, info, {
+                                    Size = active and e.items.fade_full or e.items.fade_hidden,
+                                })
+                            end
+                            if e.items.line then
+                                e.tweens[#e.tweens + 1] = tween_service:Create(e.items.line, info, {
+                                    Size = active and e.items.line_full or e.items.line_hidden,
+                                })
+                            end
+                        end
+
+                        for t = 1, #e.tweens do
+                            e.tweens[t]:Play()
+                        end
+
+                        e.tweens[1].Completed:Connect(function()
+                            if e.anim_id ~= anim_id then
+                                return
+                            end
+                            e.tweens = nil
+                            if not e.active and frame and frame.Parent then
+                                frame.GroupTransparency = 1
+                                if e.items then
+                                    if e.items.fade then
+                                        e.items.fade.Size = e.items.fade_hidden
+                                    end
+                                    if e.items.line then
+                                        e.items.line.Size = e.items.line_hidden
+                                    end
+                                end
+                                frame.Visible = false
+                            end
+                        end)
+                    end
+                end
+            end
+        end)
+        table.insert(library.connections, library._scroll_fade_conn)
+    end
+
+    function library:_setup_scroll_indicators(items)
+        if type(items) ~= "table" then
+            return
+        end
+
+        local button_holder = items["button_holder"]
+        local side_frame = items["side_frame"]
+        if button_holder and side_frame then
+            library:_register_scroll_fade(library:_make_fade(side_frame, "y", "start"), "y", "start", function()
+                return button_holder
+            end)
+            library:_register_scroll_fade(library:_make_fade(side_frame, "y", "end"), "y", "end", function()
+                return button_holder
+            end)
+        end
+
+        local multi_holder = items["multi_holder"]
+        if multi_holder then
+            library:_register_scroll_fade(library:_make_fade(multi_holder, "x", "start"), "x", "start", function()
+                return library._active_subtab_holder
+            end)
+            library:_register_scroll_fade(library:_make_fade(multi_holder, "x", "end"), "x", "end", function()
+                return library._active_subtab_holder
+            end)
+        end
+
+        library:_start_scroll_fade_loop()
+    end
+end
 
 return library
