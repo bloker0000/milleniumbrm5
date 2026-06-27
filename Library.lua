@@ -609,7 +609,13 @@
 
         function library:get_config()
             local Config = {}
-            
+
+            pcall(function()
+                if library._capture_hud_positions then
+                    library:_capture_hud_positions()
+                end
+            end)
+
             for _, v in next, flags do
                 if _ == "config_autoload_enabled" or _ == "config_autoload_name" then
                     -- auto-load target lives only in autoload.txt; never bake it into a saved config
@@ -644,10 +650,17 @@
                     else
                         function_set(v)
                     end
-                end 
-            end 
+                end
+            end
+
+            pcall(function()
+                if library._apply_hud_positions then
+                    library:_apply_hud_positions(config)
+                end
+            end)
+
             library._loading_config = false
-        end 
+        end
         
         function library:round(number, float) 
             local multiplier = 1 / (float or 1)
@@ -1507,10 +1520,10 @@
                     local session_start
                     if getgenv then
                         local env = getgenv()
-                        if env.BRM5_SESSION_START == nil then
-                            env.BRM5_SESSION_START = os.clock()
+                        if env.MULTYHUB_SESSION_START == nil then
+                            env.MULTYHUB_SESSION_START = env.BRM5_SESSION_START or os.clock()
                         end
-                        session_start = env.BRM5_SESSION_START
+                        session_start = env.MULTYHUB_SESSION_START
                     end
                     info = {
                         options = default_info_options(),
@@ -2060,7 +2073,7 @@
                     set_info_value(info, "players", (mx and mx > 0) and (n .. "/" .. mx) or tostring(n))
                 end
                 if items.session then
-                    local base = (getgenv and getgenv().BRM5_SESSION_START) or info.start_clock
+                    local base = (getgenv and (getgenv().MULTYHUB_SESSION_START or getgenv().BRM5_SESSION_START)) or info.start_clock
                     local secs = floor(now - base)
                     local h = floor(secs / 3600)
                     local m = floor((secs % 3600) / 60)
@@ -2223,6 +2236,191 @@
                     library["info_gui"] = nil
                 end
                 library._info_list = nil
+            end
+
+            local HUD_POS_PREFIX = { keybind = "keybind_list_pos", info = "info_list_pos" }
+
+            local function hud_owner(kind)
+                if kind == "keybind" then
+                    return library._keybind_list
+                end
+                return library._info_list
+            end
+
+            function library:_encode_hud_position(prefix, pos)
+                local target = library.flags
+                if typeof(pos) ~= "UDim2" or type(target) ~= "table" then
+                    return
+                end
+                target[prefix .. "_x_scale"] = pos.X.Scale
+                target[prefix .. "_x_offset"] = pos.X.Offset
+                target[prefix .. "_y_scale"] = pos.Y.Scale
+                target[prefix .. "_y_offset"] = pos.Y.Offset
+            end
+
+            function library:_decode_hud_position(prefix, source)
+                source = type(source) == "table" and source or library.flags
+                if type(source) ~= "table" then
+                    return nil
+                end
+                local xs = source[prefix .. "_x_scale"]
+                local xo = source[prefix .. "_x_offset"]
+                local ys = source[prefix .. "_y_scale"]
+                local yo = source[prefix .. "_y_offset"]
+                if type(xs) == "number" and type(xo) == "number" and type(ys) == "number" and type(yo) == "number" then
+                    return UDim2.new(xs, xo, ys, yo)
+                end
+                return nil
+            end
+
+            function library:_capture_hud_positions()
+                for kind, prefix in next, HUD_POS_PREFIX do
+                    local owner = hud_owner(kind)
+                    local outline = owner and owner.items and owner.items["outline"]
+                    local pos = (outline and outline.Parent and outline.Position)
+                        or (owner and owner.options and owner.options.position)
+                    library:_encode_hud_position(prefix, pos)
+                end
+            end
+
+            function library:_apply_hud_positions(source)
+                for kind, prefix in next, HUD_POS_PREFIX do
+                    local owner = hud_owner(kind)
+                    if type(owner) == "table" then
+                        local pos = library:_decode_hud_position(prefix, source)
+                        if pos then
+                            owner.options = owner.options or {}
+                            owner.options.position = pos
+                            owner._user_position = true
+                            library:_encode_hud_position(prefix, pos)
+                            local outline = owner.items and owner.items["outline"]
+                            if outline and outline.Parent then
+                                outline.Position = pos
+                            end
+                        end
+                    end
+                end
+            end
+
+            function library:_info_default_opts()
+                return {
+                    enabled = true,
+                    corner = "Top Right",
+                    width = 200,
+                    layout = "Vertical",
+                    per_column = 4,
+                    text_size = 13,
+                    use_accent = true,
+                    show_title = true,
+                    background_opacity = 1,
+                    clock_24h = true,
+                    show_seconds = true,
+                    date_format = "DD/MM/YYYY",
+                    watermark = library._info_watermark or "MultyHub",
+                    items = {
+                        fps = true,
+                        avg_fps = false,
+                        min_fps = false,
+                        max_fps = false,
+                        ping = true,
+                        memory = false,
+                        players = false,
+                        session = false,
+                        time = true,
+                        date = false,
+                        username = true,
+                        display = false,
+                        game = false,
+                    },
+                }
+            end
+
+            function library:_apply_info_from_flags()
+                if type(library.info_list) ~= "function" then
+                    return
+                end
+                local opts = library._info_opts
+                if type(opts) ~= "table" then
+                    opts = library:_info_default_opts()
+                    library._info_opts = opts
+                end
+                opts.items = opts.items or {}
+                if library._info_watermark ~= nil then
+                    opts.watermark = library._info_watermark
+                end
+                pcall(library.info_list, library, opts)
+            end
+
+            function library:build_info_settings(parent, options)
+                options = options or {}
+                if type(parent) ~= "table" then
+                    return
+                end
+                if options.watermark ~= nil then
+                    library._info_watermark = tostring(options.watermark)
+                end
+
+                local yield = type(options.yield) == "function" and options.yield or function() end
+
+                local opts = library._info_opts
+                if type(opts) ~= "table" then
+                    opts = library:_info_default_opts()
+                    library._info_opts = opts
+                end
+                opts.items = opts.items or {}
+                if library._info_watermark ~= nil then
+                    opts.watermark = library._info_watermark
+                end
+
+                local function apply()
+                    library:_apply_info_from_flags()
+                end
+
+                local col1 = parent:column({})
+                local panel = col1:section({ name = "Panel", icon = "rbxassetid://7733970318", default = true })
+
+                panel:toggle({ name = "Enable Info Panel", flag = "info_enabled", default = true, seperator = true, callback = function(v) opts.enabled = v; apply() end })
+                panel:dropdown({ name = "Position", flag = "info_corner", items = { "Top Right", "Top Left", "Bottom Right", "Bottom Left" }, default = "Top Right", seperator = true, callback = function(v) opts.corner = v; apply() end })
+                panel:dropdown({ name = "Layout", flag = "info_layout", items = { "Vertical", "Horizontal" }, default = "Vertical", seperator = true, callback = function(v) opts.layout = v; apply() end })
+                panel:slider({ name = "Items Per Column", flag = "info_per_column", min = 1, max = 12, default = 4, seperator = true, callback = function(v) opts.per_column = v; apply() end })
+                panel:slider({ name = "Width", flag = "info_width", min = 110, max = 360, default = 200, suffix = "px", seperator = true, callback = function(v) opts.width = v; apply() end })
+                panel:slider({ name = "Text Size", flag = "info_text_size", min = 10, max = 20, default = 13, seperator = true, callback = function(v) opts.text_size = v; apply() end })
+                panel:slider({ name = "Background Opacity", flag = "info_bg_opacity", min = 0, max = 100, default = 100, suffix = "%", seperator = true, callback = function(v) opts.background_opacity = v / 100; apply() end })
+                panel:toggle({ name = "Accent Values", flag = "info_use_accent", default = true, seperator = true, callback = function(v) opts.use_accent = v; apply() end })
+                panel:toggle({ name = "Show Title", flag = "info_show_title", default = true, seperator = false, callback = function(v) opts.show_title = v; apply() end })
+
+                local fmt = col1:section({ name = "Time & Date", icon = "rbxassetid://8997384456", default = true })
+                fmt:toggle({ name = "24-Hour Clock", flag = "info_clock_24h", default = true, seperator = true, callback = function(v) opts.clock_24h = v; apply() end })
+                fmt:toggle({ name = "Show Seconds", flag = "info_show_seconds", default = true, seperator = true, callback = function(v) opts.show_seconds = v; apply() end })
+                fmt:dropdown({ name = "Date Format", flag = "info_date_format", items = { "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD MMM YYYY" }, default = "DD/MM/YYYY", seperator = false, callback = function(v) opts.date_format = v; apply() end })
+
+                yield(true)
+
+                local col2 = parent:column({})
+                local list = col2:section({ name = "Items", icon = "rbxassetid://7743869317", default = true })
+
+                local function itemToggle(name, flag, key, default, sep)
+                    list:toggle({ name = name, flag = flag, default = default, seperator = sep, callback = function(v) opts.items[key] = v; apply() end })
+                end
+
+                itemToggle("FPS", "info_item_fps", "fps", true, true)
+                itemToggle("Average FPS", "info_item_avg_fps", "avg_fps", false, true)
+                itemToggle("Lowest FPS", "info_item_min_fps", "min_fps", false, true)
+                itemToggle("Highest FPS", "info_item_max_fps", "max_fps", false, true)
+                itemToggle("Ping", "info_item_ping", "ping", true, true)
+                itemToggle("Memory", "info_item_memory", "memory", false, true)
+                itemToggle("Player Count", "info_item_players", "players", false, true)
+                itemToggle("Session Time", "info_item_session", "session", false, true)
+                itemToggle("Time", "info_item_time", "time", true, true)
+                itemToggle("Date", "info_item_date", "date", false, true)
+                itemToggle("Username", "info_item_username", "username", true, true)
+                itemToggle("Display Name", "info_item_display", "display", false, true)
+                itemToggle("Game Name", "info_item_game", "game", false, false)
+
+                yield(true)
+
+                apply()
+                return library._info_list
             end
         end
 
