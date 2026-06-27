@@ -1,7 +1,7 @@
 --[[
 
     Milenium Library
-    -> This library is made by "@finobe"
+    -> This library is made by "@finobe" (https://discord.gg/aFfZDygBRd)
     -> Edited by "@.multyply" to work with "MultyHub"
 ]]
 
