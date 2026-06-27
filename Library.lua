@@ -1,9 +1,8 @@
 --[[
 
     Milenium Library
-    -> Made by @finobe 
-    -> Kind of got bored idk what to do with life
-    -> Idk who or why this got leaked, ui was VERY popular and high in demand with customers
+    -> This library is made by "@finobe"
+    -> Edited by "@.multyply" to work with "MultyHub"
 ]]
 
 -- Variables 
@@ -5629,7 +5628,7 @@
             local column = appearance_page:column({})
                 local section = column:section({name = "Appearance", size = 1, default = true, icon = "rbxassetid://7734021595"})
             section:colorpicker({name = "Accent", flag = "menu_accent", color = themes.preset.accent})
-            section:keybind({name = "Menu Bind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function() window.toggle_menu() end, default = true})
+            section:keybind({name = "Menu Toggle Keybind", flag = "menu_bind", key = Enum.KeyCode.End, callback = function() window.toggle_menu() end, default = true})
             section:slider({
                 name = "Background Opacity",
                 flag = "menu_bg_opacity",
