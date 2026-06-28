@@ -658,6 +658,12 @@
                 end
             end)
 
+            pcall(function()
+                if library._apply_window_background then
+                    library:_apply_window_background()
+                end
+            end)
+
             library._loading_config = false
         end
         
@@ -2547,6 +2553,29 @@
                         end)
                     end)
                 end
+
+                -- Tiled background pattern (first visual child so it sits behind all content).
+                -- Its own UICorner matches the window radius so the tiling never pokes past corners.
+                library._window_background = library:create( "ImageLabel" , {
+                    Parent = items[ "main" ];
+                    Name = "\0";
+                    BackgroundTransparency = 1;
+                    BorderColor3 = rgb(0, 0, 0);
+                    BorderSizePixel = 0;
+                    Position = dim2(0, 0, 0, 0);
+                    Size = dim2(1, 0, 1, 0);
+                    ScaleType = Enum.ScaleType.Tile;
+                    TileSize = dim2(0, 74, 0, 74);
+                    Image = "";
+                    ImageColor3 = rgb(255, 255, 255);
+                    ImageTransparency = 1;
+                    ZIndex = 1;
+                });
+                library:create( "UICorner" , {
+                    Parent = library._window_background;
+                    CornerRadius = dim(0, 10)
+                });
+                pcall(function() library:_apply_window_background() end)
 
                 items[ "side_frame" ] = library:create( "Frame" , {
                     Parent = items[ "main" ];
@@ -5649,6 +5678,44 @@
                 end,
             })
 
+            local bg_column = appearance_page:column({})
+            local bg_section = bg_column:section({name = "Background", side = "right", size = 1, default = true, icon = "rbxassetid://7734021595"})
+            bg_section:dropdown({
+                name = "Pattern",
+                flag = "bg_pattern",
+                items = library._bg_pattern_order or {"None"},
+                default = "None",
+                callback = function() library:_apply_window_background() end,
+            })
+            bg_section:slider({
+                name = "Opacity",
+                flag = "bg_pattern_opacity",
+                min = 0,
+                max = 100,
+                default = 15,
+                suffix = "%",
+                callback = function() library:_apply_window_background() end,
+            })
+            bg_section:slider({
+                name = "Tile Size",
+                flag = "bg_pattern_size",
+                min = 40,
+                max = 300,
+                default = 74,
+                suffix = "px",
+                callback = function() library:_apply_window_background() end,
+            })
+            bg_section:colorpicker({
+                name = "Color",
+                flag = "bg_pattern_color",
+                color = rgb(255, 255, 255),
+                callback = function(col)
+                    if library._window_background and typeof(col) == "Color3" then
+                        library._window_background.ImageColor3 = col
+                    end
+                end,
+            })
+
             local column = keybind_page:column({})
                 local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://7733924046"})
             library._keybind_list_lock_defaults = true
@@ -7721,6 +7788,49 @@ do -- Cursor control
 
     function library:is_forcing_cursor()
         return cursor_active()
+    end
+end
+
+do -- Background patterns (tileable window backdrops, inspired by Bracket / Parvus)
+    library._bg_patterns = {
+        ["None"] = "",
+        ["Floral"] = "rbxassetid://5553946656",
+        ["Hexagons"] = "rbxassetid://6073628839",
+        ["Circles"] = "rbxassetid://6071579801",
+        ["Hearts"] = "rbxassetid://6073763717",
+        ["Abstract"] = "rbxassetid://6073743871",
+        ["Lace"] = "rbxassetid://6071575925",
+        ["Legacy"] = "rbxassetid://2151741365",
+    }
+    library._bg_pattern_order = { "None", "Floral", "Hexagons", "Circles", "Hearts", "Abstract", "Lace", "Legacy" }
+
+    -- Applies the saved background-pattern flags to the window backdrop ImageLabel.
+    function library:_apply_window_background()
+        local bg = library._window_background
+        if not bg then return end
+        local f = library.flags or {}
+
+        local id = library._bg_patterns[f.bg_pattern or "None"]
+        if not id or id == "" then
+            bg.Image = ""
+            bg.ImageTransparency = 1
+            return
+        end
+        bg.Image = id
+
+        local opacity = tonumber(f.bg_pattern_opacity)
+        if opacity == nil then opacity = 15 end
+        if opacity < 0 then opacity = 0 elseif opacity > 100 then opacity = 100 end
+        bg.ImageTransparency = 1 - (opacity / 100)
+
+        local size = tonumber(f.bg_pattern_size)
+        if size == nil then size = 74 end
+        bg.TileSize = dim2(0, size, 0, size)
+
+        local col = f.bg_pattern_color
+        if type(col) == "table" and typeof(col.Color) == "Color3" then
+            bg.ImageColor3 = col.Color
+        end
     end
 end
 
