@@ -5640,6 +5640,14 @@
                     library:set_menu_background_opacity((tonumber(value) or 100) / 100)
                 end,
             })
+            section:toggle({
+                name = "Force Mouse Cursor",
+                flag = "force_cursor",
+                default = false,
+                callback = function(value)
+                    library:set_force_cursor("user", value)
+                end,
+            })
 
             local column = keybind_page:column({})
                 local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://7733924046"})
@@ -7616,6 +7624,51 @@ do -- Scroll Indicators
         end
 
         library:_start_scroll_fade_loop()
+    end
+end
+
+do -- Cursor control
+    library._cursor_sources = library._cursor_sources or {}
+
+    local function cursor_active()
+        for _ in next, library._cursor_sources do
+            return true
+        end
+        return false
+    end
+
+    function library:_update_cursor_force()
+        if cursor_active() then
+            if not library._cursor_conn then
+                library._cursor_conn = run.RenderStepped:Connect(function()
+                    pcall(function()
+                        if not uis.MouseIconEnabled then
+                            uis.MouseIconEnabled = true
+                        end
+                        if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
+                            uis.MouseBehavior = Enum.MouseBehavior.Default
+                        end
+                    end)
+                end)
+                table.insert(library.connections, library._cursor_conn)
+            end
+        elseif library._cursor_conn then
+            pcall(function()
+                library._cursor_conn:Disconnect()
+            end)
+            library._cursor_conn = nil
+        end
+    end
+
+    -- Force the mouse cursor visible + unlocked while at least one source is active.
+    -- Ref-counted by source key so multiple callers (menu toggle, welcome modal, ...) coexist.
+    function library:set_force_cursor(source, on)
+        library._cursor_sources[tostring(source or "default")] = on and true or nil
+        library:_update_cursor_force()
+    end
+
+    function library:is_forcing_cursor()
+        return library._cursor_conn ~= nil
     end
 end
 
