@@ -7794,9 +7794,9 @@ end
 do -- Background patterns (tileable window backdrops, inspired by Bracket / Parvus)
     library._bg_patterns = {
         ["None"] = "",
-        ["Multy"] = "rbxassetid://109480991398795",
+        ["Multy"] = "rbxassetid://76910539512771",
         ["Floral"] = "rbxassetid://5553946656",
-        ["Hexagons"] = "rbxassetid://12685791152",
+        ["Hexagons"] = "rbxassetid://12685791118",
         ["Circles"] = "rbxassetid://6071579801",
         ["Hearts"] = "rbxassetid://6073763717",
         ["Topography"] = "rbxassetid://96851178571499",
@@ -7804,6 +7804,39 @@ do -- Background patterns (tileable window backdrops, inspired by Bracket / Parv
         ["Feet"] = "rbxassetid://93885270267595",
     }
     library._bg_pattern_order = { "None", "Multy", "Floral", "Hexagons", "Circles", "Hearts", "Topography", "Water", "Feet" }
+
+    -- ImageLabel.Image renders the underlying TEXTURE, but IDs copied from the marketplace are
+    -- often Decal/asset IDs that don't render directly. Resolve each id to its real texture once
+    -- (via GetObjects -> Decal.Texture), cache it, and fall back to the raw id on failure.
+    library._texture_cache = library._texture_cache or {}
+    function library:_resolve_texture(raw)
+        if type(raw) ~= "string" or raw == "" then return "" end
+        local cache = library._texture_cache
+        if cache[raw] ~= nil then return cache[raw] end
+        cache[raw] = raw
+        task.spawn(function()
+            local resolved = raw
+            local ok, objs = pcall(function() return game:GetObjects(raw) end)
+            if ok and type(objs) == "table" and objs[1] then
+                local o = objs[1]
+                local tex
+                pcall(function()
+                    if o:IsA("Decal") or o:IsA("Texture") then
+                        tex = o.Texture
+                    elseif o:IsA("ImageLabel") or o:IsA("ImageButton") then
+                        tex = o.Image
+                    end
+                end)
+                if type(tex) == "string" and tex ~= "" then resolved = tex end
+                pcall(function() o:Destroy() end)
+            end
+            cache[raw] = resolved
+            if resolved ~= raw then
+                pcall(function() library:_apply_window_background() end)
+            end
+        end)
+        return raw
+    end
 
     -- Applies the saved background-pattern flags to the window backdrop ImageLabel.
     function library:_apply_window_background()
@@ -7817,7 +7850,7 @@ do -- Background patterns (tileable window backdrops, inspired by Bracket / Parv
             bg.ImageTransparency = 1
             return
         end
-        bg.Image = id
+        bg.Image = library:_resolve_texture(id)
 
         local opacity = tonumber(f.bg_pattern_opacity)
         if opacity == nil then opacity = 5 end
