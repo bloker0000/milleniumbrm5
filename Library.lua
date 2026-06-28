@@ -5692,7 +5692,7 @@
                 flag = "bg_pattern_opacity",
                 min = 0,
                 max = 100,
-                default = 15,
+                default = 5,
                 suffix = "%",
                 callback = function() library:_apply_window_background() end,
             })
@@ -5700,7 +5700,7 @@
                 name = "Tile Size",
                 flag = "bg_pattern_size",
                 min = 40,
-                max = 300,
+                max = 1024,
                 default = 74,
                 suffix = "px",
                 callback = function() library:_apply_window_background() end,
@@ -7794,15 +7794,16 @@ end
 do -- Background patterns (tileable window backdrops, inspired by Bracket / Parvus)
     library._bg_patterns = {
         ["None"] = "",
+        ["Multy"] = "rbxassetid://109480991398795",
         ["Floral"] = "rbxassetid://5553946656",
-        ["Hexagons"] = "rbxassetid://6073628839",
+        ["Hexagons"] = "rbxassetid://12685791152",
         ["Circles"] = "rbxassetid://6071579801",
         ["Hearts"] = "rbxassetid://6073763717",
-        ["Abstract"] = "rbxassetid://6073743871",
-        ["Lace"] = "rbxassetid://6071575925",
-        ["Legacy"] = "rbxassetid://2151741365",
+        ["Topography"] = "rbxassetid://96851178571499",
+        ["Water"] = "rbxassetid://120828758709242",
+        ["Feet"] = "rbxassetid://93885270267595",
     }
-    library._bg_pattern_order = { "None", "Floral", "Hexagons", "Circles", "Hearts", "Abstract", "Lace", "Legacy" }
+    library._bg_pattern_order = { "None", "Multy", "Floral", "Hexagons", "Circles", "Hearts", "Topography", "Water", "Feet" }
 
     -- Applies the saved background-pattern flags to the window backdrop ImageLabel.
     function library:_apply_window_background()
@@ -7819,7 +7820,7 @@ do -- Background patterns (tileable window backdrops, inspired by Bracket / Parv
         bg.Image = id
 
         local opacity = tonumber(f.bg_pattern_opacity)
-        if opacity == nil then opacity = 15 end
+        if opacity == nil then opacity = 5 end
         if opacity < 0 then opacity = 0 elseif opacity > 100 then opacity = 100 end
         bg.ImageTransparency = 1 - (opacity / 100)
 
