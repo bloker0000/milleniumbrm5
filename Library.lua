@@ -7628,27 +7628,73 @@ do -- Scroll Indicators
 end
 
 do -- Cursor control
-    library._cursor_sources = library._cursor_sources or {}
+    -- Source set is shared via getgenv so the key UI prefix, the welcome modal and the menu
+    -- toggle all coordinate; the cursor stays forced while the set is non-empty (handoff never drops).
+    local function cursor_refs()
+        local g = (type(getgenv) == "function" and getgenv()) or _G
+        g.MULTYHUB_CURSOR_REFS = g.MULTYHUB_CURSOR_REFS or {}
+        return g.MULTYHUB_CURSOR_REFS, g
+    end
 
     local function cursor_active()
-        for _ in next, library._cursor_sources do
+        for _ in next, (cursor_refs()) do
             return true
         end
         return false
     end
 
+    -- BRM5's CursorInterface re-asserts MouseIconEnabled/MouseBehavior every frame (hidden +
+    -- LockCenter outside of menus), clobbering plain UserInputService writes. Override its
+    -- per-frame Update so our forced state is the final write each frame. Idempotent + global-guarded.
+    function library:_install_cursor_override()
+        local _, g = cursor_refs()
+        if g.MULTYHUB_CURSOR_HOOKED then return true end
+        if type(getgc) ~= "function" then return false end
+
+        local proto
+        pcall(function()
+            for _, v in next, getgc(true) do
+                if type(v) == "table"
+                    and rawget(v, "__index") == v
+                    and type(rawget(v, "Update")) == "function"
+                    and type(rawget(v, "_update")) == "function"
+                    and type(rawget(v, "SetBlockedPosition")) == "function"
+                    and type(rawget(v, "new")) == "function" then
+                    proto = v
+                    break
+                end
+            end
+        end)
+        if not proto then return false end
+
+        local old_update = proto.Update
+        local wrap = (type(newcclosure) == "function" and newcclosure) or function(f) return f end
+        proto.Update = wrap(function(self, ...)
+            old_update(self, ...)
+            local refs = rawget(g, "MULTYHUB_CURSOR_REFS")
+            if refs and next(refs) ~= nil then
+                pcall(function()
+                    uis.MouseIconEnabled = true
+                    uis.MouseBehavior = Enum.MouseBehavior.Default
+                end)
+            end
+        end)
+
+        g.MULTYHUB_CURSOR_HOOKED = true
+        return true
+    end
+
     function library:_update_cursor_force()
         if cursor_active() then
+            library:_install_cursor_override()
             if not library._cursor_conn then
                 library._cursor_conn = run.RenderStepped:Connect(function()
-                    pcall(function()
-                        if not uis.MouseIconEnabled then
+                    if cursor_active() then
+                        pcall(function()
                             uis.MouseIconEnabled = true
-                        end
-                        if uis.MouseBehavior ~= Enum.MouseBehavior.Default then
                             uis.MouseBehavior = Enum.MouseBehavior.Default
-                        end
-                    end)
+                        end)
+                    end
                 end)
                 table.insert(library.connections, library._cursor_conn)
             end
@@ -7661,14 +7707,15 @@ do -- Cursor control
     end
 
     -- Force the mouse cursor visible + unlocked while at least one source is active.
-    -- Ref-counted by source key so multiple callers (menu toggle, welcome modal, ...) coexist.
+    -- Ref-set keyed by source so multiple callers (menu toggle, welcome modal, ...) coexist.
     function library:set_force_cursor(source, on)
-        library._cursor_sources[tostring(source or "default")] = on and true or nil
+        local refs = cursor_refs()
+        refs[tostring(source or "default")] = on and true or nil
         library:_update_cursor_force()
     end
 
     function library:is_forcing_cursor()
-        return library._cursor_conn ~= nil
+        return cursor_active()
     end
 end
 
