@@ -2493,7 +2493,8 @@
                 ZIndexBehavior = Enum.ZIndexBehavior.Global;
                 IgnoreGuiInset = true;
             });
-            
+            pcall(function() library:_bind_cursor_menu() end)
+
             library[ "other" ] = library:create( "ScreenGui" , {
                 Parent = coregui;
                 Name = "multyhub";
@@ -5674,7 +5675,8 @@
                 flag = "force_cursor",
                 default = false,
                 callback = function(value)
-                    library:set_force_cursor("user", value)
+                    library._cursor_user_enabled = value and true or false
+                    library:_sync_user_cursor()
                 end,
             })
 
@@ -7788,6 +7790,30 @@ do -- Cursor control
 
     function library:is_forcing_cursor()
         return cursor_active()
+    end
+
+    -- The "user" toggle only forces the cursor while the menu is actually open. Other sources
+    -- (welcome modal, key UI) stay unconditional since they are the visible UI at those moments.
+    function library:_is_menu_open()
+        local items = library["items"]
+        return items ~= nil and items.Enabled == true
+    end
+
+    function library:_sync_user_cursor()
+        library:set_force_cursor("user", library._cursor_user_enabled and library:_is_menu_open())
+    end
+
+    function library:_bind_cursor_menu()
+        if library._cursor_menu_conn then
+            pcall(function() library._cursor_menu_conn:Disconnect() end)
+            library._cursor_menu_conn = nil
+        end
+        local items = library["items"]
+        if not items then return end
+        library._cursor_menu_conn = items:GetPropertyChangedSignal("Enabled"):Connect(function()
+            pcall(function() library:_sync_user_cursor() end)
+        end)
+        table.insert(library.connections, library._cursor_menu_conn)
     end
 end
 
