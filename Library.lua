@@ -7646,9 +7646,14 @@ do -- Cursor control
     -- BRM5's CursorInterface re-asserts MouseIconEnabled/MouseBehavior every frame (hidden +
     -- LockCenter outside of menus), clobbering plain UserInputService writes. Override its
     -- per-frame Update so our forced state is the final write each frame. Idempotent + global-guarded.
+    -- GAME-SPECIFIC: gated to the BRM5 universe so the getgc scan/hook never runs (or false-matches)
+    -- in any other game. Elsewhere the generic UserInputService loop below is the only enforcement.
     function library:_install_cursor_override()
         local _, g = cursor_refs()
         if g.MULTYHUB_CURSOR_HOOKED then return true end
+        local in_brm5 = false
+        pcall(function() in_brm5 = game.GameId == 1054526971 end)
+        if not in_brm5 then return false end
         if type(getgc) ~= "function" then return false end
 
         local proto
