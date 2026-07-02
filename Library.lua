@@ -1494,6 +1494,31 @@
             local INFO_FPS_WINDOW = 60
             local INFO_FPS_UPDATE_INTERVAL = 0.1
 
+            -- Header geometry used to let the title "own" the panel width.
+            local INFO_TITLE_SIZE = 15
+            local INFO_TITLE_LEFT_PAD = 10   -- title x offset
+            local INFO_TITLE_GAP = 16        -- whitespace between title and the INFO label
+            local INFO_TITLE_ACCENT_AREA = 42 -- room reserved for the right-aligned "INFO"
+            local INFO_TITLE_MAX_WIDTH = 500  -- sane cap; TextTruncate still guards past this
+
+            local info_text_service = game:GetService("TextService")
+
+            -- Full (untruncated) pixel width of the title text in the real header font.
+            local function measure_info_title_width(text, font)
+                local ok, bounds = pcall(function()
+                    local params = Instance.new("GetTextBoundsParams")
+                    params.Text = text
+                    params.Font = font
+                    params.Size = INFO_TITLE_SIZE
+                    params.Width = 100000
+                    return info_text_service:GetTextBoundsAsync(params)
+                end)
+                if ok and bounds and bounds.X then
+                    return bounds.X
+                end
+                return #tostring(text) * (INFO_TITLE_SIZE * 0.6) -- rough fallback if the API fails
+            end
+
             local function default_info_options()
                 return {
                     enabled = true,
@@ -1853,6 +1878,22 @@
                 items["title"].Text = tostring(opts.watermark or "MultyHub")
                 items["title_accent"].TextColor3 = themes.preset.accent
 
+                -- Measure the untruncated title width once per unique watermark (off the hot
+                -- path), then relayout so the panel can grow to fit it. Cached per watermark.
+                if show_title then
+                    local wm = tostring(opts.watermark or "MultyHub")
+                    if info._title_src ~= wm then
+                        info._title_src = wm
+                        task.spawn(function()
+                            local w = measure_info_title_width(wm, fonts.font)
+                            info._title_min_width = w + INFO_TITLE_LEFT_PAD + INFO_TITLE_GAP + INFO_TITLE_ACCENT_AREA
+                            if info.items["outline"] then
+                                library:_refresh_info_list()
+                            end
+                        end)
+                    end
+                end
+
                 local bg_t = 1 - clamp(tonumber(opts.background_opacity) or 1, 0, 1)
                 items["inline"].BackgroundTransparency = bg_t
                 items["outline"].BackgroundTransparency = bg_t
@@ -1949,6 +1990,25 @@
                 end
 
                 local panel_width = (2 * side_pad) + (num_cols * col_width) + ((num_cols - 1) * col_gap)
+
+                -- Title owns the width: if the title (+ whitespace + INFO label) needs more room
+                -- than the columns give it, widen the panel and stretch the columns so the title
+                -- never truncates. Only fires when the title overflows, so short-title panels
+                -- (e.g. other games using this library) are left exactly as they were.
+                local title_min = (show_title and info._title_min_width) or 0
+                if title_min > INFO_TITLE_MAX_WIDTH then
+                    title_min = INFO_TITLE_MAX_WIDTH
+                end
+                if title_min > panel_width then
+                    col_width = col_width + (title_min - panel_width) / num_cols
+                    panel_width = title_min
+                    for idx = 1, #info.cols do
+                        local col = info.cols[idx]
+                        if col_counts[idx] and col_counts[idx] > 0 then
+                            col.Size = dim2(0, col_width, 1, 0)
+                        end
+                    end
+                end
 
                 items["rows"].Position = dim2(0, 0, 0, header_h + top_pad)
                 items["rows"].Size = dim2(1, 0, 0, list_h + bottom_pad)
