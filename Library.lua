@@ -5747,6 +5747,7 @@
                 flag = "bg_pattern",
                 items = library._bg_pattern_order or {"None"},
                 default = "None",
+                width = 92,
                 callback = function() library:_apply_window_background() end,
             })
             bg_section:slider({
@@ -5791,7 +5792,7 @@
                 library._keybind_list_user_change = previous_user_change
             end
             local keybind_list_enabled = section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = true, callback = function(bool) update_keybind_list_from_control({enabled = bool}) end})
-            local keybind_list_mode = section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = "All", callback = function(value) update_keybind_list_from_control({mode = value}) end})
+            local keybind_list_mode = section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = "All", width = 92, callback = function(value) update_keybind_list_from_control({mode = value}) end})
             local keybind_list_show_unbound = section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = false, callback = function(bool) update_keybind_list_from_control({show_unbound = bool}) end})
             local keybind_list_auto_height = section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = true, callback = function(bool) update_keybind_list_from_control({auto_height = bool}) end})
             library._keybind_list_controls = {
