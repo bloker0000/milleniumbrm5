@@ -3866,6 +3866,24 @@
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(255, 255, 255)
                 });
+
+                do -- keep the bar below the label when `info` wraps it onto extra lines
+                    local name_label = items[ "name" ]
+                    local right_components = items[ "right_components" ]
+                    local last_offset = nil
+
+                    local function sync_slider_offset()
+                        local height = name_label.AbsoluteSize.Y
+                        local offset = height > 0 and math.max(23, height + 3) or 23
+                        if offset ~= last_offset then
+                            last_offset = offset
+                            right_components.Position = dim2(0, 4, 0, offset)
+                        end
+                    end
+
+                    insert(library.connections, name_label:GetPropertyChangedSignal("AbsoluteSize"):Connect(sync_slider_offset))
+                    sync_slider_offset()
+                end
                 
                 library:create( "UIListLayout" , {
                     Parent = items[ "right_components" ];
