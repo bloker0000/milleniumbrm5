@@ -3258,6 +3258,16 @@
                         PaddingBottom = dim(0, 10);
                         Parent = items[ "column" ]
                     });
+
+                    -- Columns are 0-width and rely on the parent's HorizontalFlex.
+                    -- Without an explicit flex basis, a TextWrapped label's unwrapped
+                    -- text drives the column's content width and overflows the tab.
+                    pcall(function()
+                        library:create( "UIFlexItem" , {
+                            Parent = items[ "column" ];
+                            FlexMode = Enum.UIFlexMode.Fill;
+                        })
+                    end)
                     
                     library:create( "UIListLayout" , {
                         Parent = items[ "column" ];
