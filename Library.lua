@@ -2534,6 +2534,7 @@
             end
             library._scroll_fades = {}
             library._active_subtab_holder = nil
+            library._modal = nil
 
             local cfg = {
                 suffix = properties.suffix or properties.Suffix or "tech";
@@ -2834,6 +2835,10 @@
 
             pcall(function()
                 library:_setup_scroll_indicators(items)
+            end)
+
+            pcall(function()
+                library:_create_modal()
             end)
 
             do -- Other
@@ -8435,6 +8440,455 @@ do -- Rich List + Model Preview (universal controls)
         cfg.clear()
 
         return setmetatable(cfg, library)
+    end
+end
+
+
+do -- Modal Dialog (universal)
+
+    local CARD_BG       = rgb(14, 14, 16)
+    local CARD_STROKE   = rgb(26, 26, 32)
+    local HEAD_BG       = rgb(18, 18, 21)
+    local BTN_BG        = rgb(24, 24, 27)
+    local BTN_BG_HOVER  = rgb(31, 31, 35)
+    local BTN_STROKE    = rgb(34, 34, 39)
+    local TEXT_ON       = rgb(245, 245, 245)
+    local TEXT_BODY     = rgb(198, 198, 204)
+    local TEXT_SUB      = rgb(126, 126, 132)
+
+    local CARD_WIDTH    = 400
+    local BTN_HEIGHT    = 32
+    local BTN_GAP       = 6
+
+    function library:_create_modal()
+        local existing = library._modal
+
+        if existing and existing.root and existing.root.Parent then
+            return existing
+        end
+
+        local gui = library["items"]
+
+        if not gui then
+            return nil
+        end
+
+        local modal = {
+            open = false;
+            buttons = {};
+            callback = nil;
+            token = 0;
+        }
+
+        modal.root = library:create("Frame", {
+            Parent = gui;
+            Name = "\0";
+            Active = true;
+            Visible = false;
+            BackgroundColor3 = rgb(0, 0, 0);
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Size = dim2(1, 0, 1, 0);
+            ZIndex = 900;
+        })
+
+        modal.card = library:create("Frame", {
+            Parent = modal.root;
+            Name = "\0";
+            AnchorPoint = vec2(0.5, 0.5);
+            Position = dim2(0.5, 0, 0.5, 0);
+            Size = dim2(0, CARD_WIDTH, 0, 0);
+            AutomaticSize = Enum.AutomaticSize.Y;
+            BackgroundColor3 = CARD_BG;
+            BorderSizePixel = 0;
+            ZIndex = 902;
+        })
+
+        modal.scale = library:create("UIScale", {
+            Parent = modal.card;
+            Scale = 1;
+        })
+
+        library:create("UICorner", {
+            Parent = modal.card;
+            CornerRadius = dim(0, 10);
+        })
+
+        modal.stroke = library:create("UIStroke", {
+            Parent = modal.card;
+            Color = CARD_STROKE;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        })
+
+        library:create("UIListLayout", {
+            Parent = modal.card;
+            Padding = dim(0, 0);
+            SortOrder = Enum.SortOrder.LayoutOrder;
+        })
+
+        modal.header = library:create("Frame", {
+            Parent = modal.card;
+            Name = "\0";
+            BackgroundColor3 = HEAD_BG;
+            BorderSizePixel = 0;
+            Size = dim2(1, 0, 0, 40);
+            LayoutOrder = 1;
+            ZIndex = 903;
+        })
+
+        library:create("UICorner", {
+            Parent = modal.header;
+            CornerRadius = dim(0, 10);
+        })
+
+        library:create("Frame", {
+            Parent = modal.header;
+            Name = "\0";
+            AnchorPoint = vec2(0, 1);
+            Position = dim2(0, 0, 1, 0);
+            Size = dim2(1, 0, 0, 10);
+            BackgroundColor3 = HEAD_BG;
+            BorderSizePixel = 0;
+            ZIndex = 903;
+        })
+
+        modal.accent_bar = library:create("Frame", {
+            Parent = modal.header;
+            Name = "\0";
+            Position = dim2(0, 14, 0.5, -7);
+            Size = dim2(0, 3, 0, 14);
+            BackgroundColor3 = themes.preset.accent;
+            BorderSizePixel = 0;
+            ZIndex = 904;
+        }); library:apply_theme(modal.accent_bar, "accent", "BackgroundColor3")
+
+        library:create("UICorner", {
+            Parent = modal.accent_bar;
+            CornerRadius = dim(0, 2);
+        })
+
+        modal.title = library:create("TextLabel", {
+            Parent = modal.header;
+            Name = "\0";
+            FontFace = fonts.small;
+            Text = "";
+            TextColor3 = TEXT_ON;
+            TextSize = 15;
+            TextXAlignment = Enum.TextXAlignment.Left;
+            TextTruncate = Enum.TextTruncate.AtEnd;
+            BackgroundTransparency = 1;
+            Position = dim2(0, 25, 0, 0);
+            Size = dim2(1, -39, 1, 0);
+            BorderSizePixel = 0;
+            ZIndex = 904;
+        })
+
+        modal.content = library:create("Frame", {
+            Parent = modal.card;
+            Name = "\0";
+            BackgroundTransparency = 1;
+            Size = dim2(1, 0, 0, 0);
+            AutomaticSize = Enum.AutomaticSize.Y;
+            BorderSizePixel = 0;
+            LayoutOrder = 2;
+            ZIndex = 903;
+        })
+
+        library:create("UIListLayout", {
+            Parent = modal.content;
+            Padding = dim(0, 8);
+            SortOrder = Enum.SortOrder.LayoutOrder;
+        })
+
+        library:create("UIPadding", {
+            Parent = modal.content;
+            PaddingLeft = dim(0, 16);
+            PaddingRight = dim(0, 16);
+            PaddingTop = dim(0, 14);
+            PaddingBottom = dim(0, 14);
+        })
+
+        modal.body = library:create("TextLabel", {
+            Parent = modal.content;
+            Name = "\0";
+            FontFace = fonts.font;
+            Text = "";
+            TextColor3 = TEXT_BODY;
+            TextSize = 14;
+            TextWrapped = true;
+            TextXAlignment = Enum.TextXAlignment.Left;
+            TextYAlignment = Enum.TextYAlignment.Top;
+            BackgroundTransparency = 1;
+            Size = dim2(1, 0, 0, 0);
+            AutomaticSize = Enum.AutomaticSize.Y;
+            BorderSizePixel = 0;
+            LayoutOrder = 1;
+            ZIndex = 904;
+        })
+
+        modal.detail = library:create("TextLabel", {
+            Parent = modal.content;
+            Name = "\0";
+            FontFace = fonts.font;
+            Text = "";
+            TextColor3 = TEXT_SUB;
+            TextSize = 13;
+            TextWrapped = true;
+            TextXAlignment = Enum.TextXAlignment.Left;
+            TextYAlignment = Enum.TextYAlignment.Top;
+            BackgroundTransparency = 1;
+            Size = dim2(1, 0, 0, 0);
+            AutomaticSize = Enum.AutomaticSize.Y;
+            BorderSizePixel = 0;
+            LayoutOrder = 2;
+            Visible = false;
+            ZIndex = 904;
+        })
+
+        modal.button_row = library:create("Frame", {
+            Parent = modal.card;
+            Name = "\0";
+            BackgroundTransparency = 1;
+            Size = dim2(1, 0, 0, BTN_HEIGHT + 16);
+            BorderSizePixel = 0;
+            LayoutOrder = 3;
+            ZIndex = 903;
+        })
+
+        library:create("UIPadding", {
+            Parent = modal.button_row;
+            PaddingLeft = dim(0, 16);
+            PaddingRight = dim(0, 16);
+            PaddingBottom = dim(0, 16);
+        })
+
+        library:create("UIListLayout", {
+            Parent = modal.button_row;
+            FillDirection = Enum.FillDirection.Horizontal;
+            Padding = dim(0, BTN_GAP);
+            SortOrder = Enum.SortOrder.LayoutOrder;
+        })
+
+        for index = 1, 3 do
+            local button = {}
+
+            button.frame = library:create("TextButton", {
+                Parent = modal.button_row;
+                Name = "\0";
+                AutoButtonColor = false;
+                Text = "";
+                BackgroundColor3 = BTN_BG;
+                BorderSizePixel = 0;
+                Size = dim2(0, 0, 0, BTN_HEIGHT);
+                LayoutOrder = index;
+                Visible = false;
+                ZIndex = 904;
+            })
+
+            library:create("UICorner", {
+                Parent = button.frame;
+                CornerRadius = dim(0, 5);
+            })
+
+            button.stroke = library:create("UIStroke", {
+                Parent = button.frame;
+                Color = BTN_STROKE;
+                ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            })
+
+            button.label = library:create("TextLabel", {
+                Parent = button.frame;
+                Name = "\0";
+                FontFace = fonts.font;
+                Text = "";
+                TextColor3 = TEXT_ON;
+                TextSize = 14;
+                TextTruncate = Enum.TextTruncate.AtEnd;
+                BackgroundTransparency = 1;
+                Size = dim2(1, -10, 1, 0);
+                Position = dim2(0, 5, 0, 0);
+                BorderSizePixel = 0;
+                ZIndex = 905;
+            })
+
+            button.frame.MouseEnter:Connect(function()
+                library:tween(button.frame, { BackgroundColor3 = BTN_BG_HOVER }, Enum.EasingStyle.Quad, 0.12)
+            end)
+
+            button.frame.MouseLeave:Connect(function()
+                library:tween(button.frame, { BackgroundColor3 = BTN_BG }, Enum.EasingStyle.Quad, 0.12)
+            end)
+
+            button.frame.MouseButton1Click:Connect(function()
+                library:_modal_resolve(button.id)
+            end)
+
+            modal.buttons[index] = button
+        end
+
+        library._modal = modal
+
+        return modal
+    end
+
+    function library:_modal_layout()
+        local modal = library._modal
+
+        if not modal then
+            return
+        end
+
+        local visible = 0
+
+        for index = 1, 3 do
+            if modal.buttons[index].frame.Visible then
+                visible = visible + 1
+            end
+        end
+
+        if visible < 1 then
+            return
+        end
+
+        local share = 1 / visible
+        local trim = BTN_GAP * (visible - 1) / visible
+
+        for index = 1, 3 do
+            local frame = modal.buttons[index].frame
+
+            if frame.Visible then
+                frame.Size = dim2(share, -trim, 0, BTN_HEIGHT)
+            end
+        end
+    end
+
+    function library:_modal_resolve(id)
+        local modal = library._modal
+
+        if not modal or not modal.open then
+            return
+        end
+
+        local callback = modal.callback
+
+        modal.open = false
+        modal.callback = nil
+
+        library:hide_modal()
+
+        if callback then
+            task.spawn(callback, id)
+        end
+    end
+
+    function library:modal_visible()
+        local modal = library._modal
+
+        return (modal and modal.open) == true
+    end
+
+    function library:hide_modal()
+        local modal = library._modal
+
+        if not modal or not modal.root then
+            return
+        end
+
+        modal.open = false
+        modal.token = modal.token + 1
+
+        local token = modal.token
+
+        pcall(function()
+            library:tween(modal.root, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quint, 0.16)
+            library:tween(modal.scale, { Scale = 0.97 }, Enum.EasingStyle.Quint, 0.16)
+        end)
+
+        task.delay(0.18, function()
+            if modal.token == token and not modal.open then
+                modal.root.Visible = false
+            end
+        end)
+    end
+
+    function library:destroy_modal()
+        local modal = library._modal
+
+        if not modal then
+            return
+        end
+
+        modal.open = false
+        modal.callback = nil
+
+        pcall(function()
+            modal.root:Destroy()
+        end)
+
+        library._modal = nil
+    end
+
+    function library:show_modal(options)
+        options = options or {}
+
+        local modal = library._modal
+
+        if not modal or not modal.root or not modal.root.Parent then
+            modal = library:_create_modal()
+        end
+
+        if not modal then
+            if options.callback then
+                task.spawn(options.callback, nil)
+            end
+
+            return false
+        end
+
+        modal.title.Text = tostring(options.title or "Confirm")
+        modal.body.Text = tostring(options.body or "")
+
+        local detail = options.detail and tostring(options.detail) or ""
+
+        modal.detail.Text = detail
+        modal.detail.Visible = detail ~= ""
+
+        local list = options.buttons or {}
+
+        for index = 1, 3 do
+            local button = modal.buttons[index]
+            local entry = list[index]
+
+            if entry then
+                button.id = entry.id or entry.text or index
+                button.label.Text = tostring(entry.text or "OK")
+                button.label.TextColor3 = entry.accent and themes.preset.accent or TEXT_ON
+                button.stroke.Color = entry.accent and themes.preset.accent or BTN_STROKE
+                button.stroke.Transparency = entry.accent and 0.45 or 0
+                button.frame.BackgroundColor3 = BTN_BG
+                button.frame.Visible = true
+            else
+                button.id = nil
+                button.frame.Visible = false
+            end
+        end
+
+        library:_modal_layout()
+
+        modal.callback = options.callback
+        modal.open = true
+        modal.token = modal.token + 1
+
+        modal.root.Visible = true
+        modal.root.BackgroundTransparency = 1
+        modal.scale.Scale = 0.97
+
+        pcall(function()
+            library:tween(modal.root, { BackgroundTransparency = 0.45 }, Enum.EasingStyle.Quint, 0.2)
+            library:tween(modal.scale, { Scale = 1 }, Enum.EasingStyle.Quint, 0.22)
+        end)
+
+        return true
     end
 end
 
