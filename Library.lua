@@ -7973,4 +7973,460 @@ do -- Background patterns (tileable window backdrops, inspired by Bracket / Parv
     end
 end
 
+
+do -- Rich List + Model Preview (universal controls)
+
+    local ROW_BG          = rgb(22, 22, 24)
+    local ROW_BG_ACTIVE   = rgb(25, 25, 29)
+    local ROW_BG_HOVER    = rgb(28, 28, 32)
+    local ROW_STROKE      = rgb(28, 28, 31)
+    local ROW_STROKE_ON   = rgb(35, 35, 39)
+    local ROW_ACCENT_OFF  = rgb(58, 58, 62)
+    local TEXT_ON         = rgb(245, 245, 245)
+    local TEXT_OFF        = rgb(168, 168, 172)
+    local TEXT_SUB        = rgb(120, 120, 126)
+
+    function library:rich_list(options)
+        options = options or {}
+
+        local cfg = {
+            items = {},
+            entries = {},
+            rows = {},
+            row_count = 0,
+            selected = nil,
+            query = "",
+            row_height = options.row_height or 30,
+            list_height = options.height or 170,
+            empty_text = options.empty or "Nothing here yet",
+            on_select = options.callback or options.on_select or function() end,
+        }
+
+        local items = cfg.items
+
+        items["holder"] = library:create("Frame", {
+            Parent = self.items["elements"];
+            Name = "\0";
+            BackgroundTransparency = 1;
+            Size = dim2(1, 0, 0, 0);
+            AutomaticSize = Enum.AutomaticSize.Y;
+            BorderSizePixel = 0;
+        })
+
+        library:create("UIListLayout", {
+            Parent = items["holder"];
+            Padding = dim(0, 5);
+            SortOrder = Enum.SortOrder.LayoutOrder;
+        })
+
+        library:create("UIPadding", {
+            Parent = items["holder"];
+            PaddingLeft = dim(0, 4);
+            PaddingRight = dim(0, 4);
+            PaddingTop = dim(0, 2);
+            PaddingBottom = dim(0, 2);
+        })
+
+        if options.name then
+            items["title"] = library:create("TextLabel", {
+                Parent = items["holder"];
+                Name = "\0";
+                FontFace = fonts.small;
+                Text = options.name;
+                TextColor3 = TEXT_ON;
+                TextSize = 16;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                BackgroundTransparency = 1;
+                Size = dim2(1, 0, 0, 18);
+                LayoutOrder = 1;
+                BorderSizePixel = 0;
+            })
+        end
+
+        if options.search ~= false then
+            items["search"] = library:create("TextBox", {
+                Parent = items["holder"];
+                Name = "\0";
+                FontFace = fonts.font;
+                Text = "";
+                PlaceholderText = options.placeholder or "Search...";
+                PlaceholderColor3 = TEXT_SUB;
+                TextColor3 = TEXT_ON;
+                TextSize = 14;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                ClearTextOnFocus = false;
+                BackgroundColor3 = rgb(33, 33, 35);
+                Size = dim2(1, 0, 0, 28);
+                LayoutOrder = 2;
+                BorderSizePixel = 0;
+            })
+
+            library:create("UICorner", {
+                Parent = items["search"];
+                CornerRadius = dim(0, 4);
+            })
+
+            library:create("UIPadding", {
+                Parent = items["search"];
+                PaddingLeft = dim(0, 8);
+                PaddingRight = dim(0, 8);
+            })
+        end
+
+        items["scroll"] = library:create("ScrollingFrame", {
+            Parent = items["holder"];
+            Name = "\0";
+            Active = true;
+            BackgroundColor3 = rgb(18, 18, 20);
+            BorderSizePixel = 0;
+            Size = dim2(1, 0, 0, cfg.list_height);
+            CanvasSize = dim2(0, 0, 0, 0);
+            AutomaticCanvasSize = Enum.AutomaticSize.Y;
+            ScrollBarThickness = 2;
+            ScrollBarImageColor3 = ROW_ACCENT_OFF;
+            LayoutOrder = 3;
+        })
+
+        library:create("UICorner", {
+            Parent = items["scroll"];
+            CornerRadius = dim(0, 5);
+        })
+
+        library:create("UIStroke", {
+            Parent = items["scroll"];
+            Color = ROW_STROKE;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        })
+
+        library:create("UIListLayout", {
+            Parent = items["scroll"];
+            Padding = dim(0, 4);
+            SortOrder = Enum.SortOrder.LayoutOrder;
+        })
+
+        library:create("UIPadding", {
+            Parent = items["scroll"];
+            PaddingTop = dim(0, 5);
+            PaddingBottom = dim(0, 5);
+            PaddingLeft = dim(0, 5);
+            PaddingRight = dim(0, 5);
+        })
+
+        items["empty"] = library:create("TextLabel", {
+            Parent = items["scroll"];
+            Name = "\0";
+            FontFace = fonts.font;
+            Text = cfg.empty_text;
+            TextColor3 = TEXT_SUB;
+            TextSize = 13;
+            BackgroundTransparency = 1;
+            Size = dim2(1, 0, 0, 24);
+            LayoutOrder = 9999;
+            Visible = false;
+            BorderSizePixel = 0;
+        })
+
+        local function paint_row(row, active, hovered)
+            local bgc = ROW_BG
+            if active then
+                bgc = ROW_BG_ACTIVE
+            elseif hovered then
+                bgc = ROW_BG_HOVER
+            end
+            row.bg.BackgroundColor3 = bgc
+            row.stroke.Color = active and ROW_STROKE_ON or ROW_STROKE
+            row.accent.BackgroundColor3 = active and themes.preset.accent or ROW_ACCENT_OFF
+            row.title.TextColor3 = active and TEXT_ON or TEXT_OFF
+        end
+
+        local function build_row(index)
+            local row = {}
+
+            row.frame = library:create("Frame", {
+                Parent = items["scroll"];
+                Name = "\0";
+                Size = dim2(1, 0, 0, cfg.row_height);
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                LayoutOrder = index;
+            })
+
+            row.bg = library:create("TextButton", {
+                Parent = row.frame;
+                Name = "\0";
+                Text = "";
+                AutoButtonColor = false;
+                Size = dim2(1, 0, 1, 0);
+                BackgroundColor3 = ROW_BG;
+                BorderSizePixel = 0;
+            })
+
+            library:create("UICorner", {
+                Parent = row.bg;
+                CornerRadius = dim(0, 5);
+            })
+
+            row.stroke = library:create("UIStroke", {
+                Parent = row.bg;
+                Color = ROW_STROKE;
+                ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            })
+
+            row.accent = library:create("Frame", {
+                Parent = row.bg;
+                Name = "\0";
+                Position = dim2(0, 7, 0, 7);
+                Size = dim2(0, 2, 1, -14);
+                BackgroundColor3 = ROW_ACCENT_OFF;
+                BorderSizePixel = 0;
+            })
+
+            library:create("UICorner", {
+                Parent = row.accent;
+                CornerRadius = dim(0, 2);
+            })
+
+            row.title = library:create("TextLabel", {
+                Parent = row.bg;
+                Name = "\0";
+                FontFace = fonts.font;
+                Text = "";
+                TextColor3 = TEXT_OFF;
+                TextSize = 13;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                TextTruncate = Enum.TextTruncate.AtEnd;
+                BackgroundTransparency = 1;
+                Position = dim2(0, 16, 0, 0);
+                Size = dim2(1, -76, 1, 0);
+                BorderSizePixel = 0;
+            })
+
+            row.sub = library:create("TextLabel", {
+                Parent = row.bg;
+                Name = "\0";
+                FontFace = fonts.font;
+                Text = "";
+                TextColor3 = TEXT_SUB;
+                TextSize = 12;
+                TextXAlignment = Enum.TextXAlignment.Right;
+                TextTruncate = Enum.TextTruncate.AtEnd;
+                BackgroundTransparency = 1;
+                Position = dim2(1, -62, 0, 0);
+                Size = dim2(0, 54, 1, 0);
+                BorderSizePixel = 0;
+            })
+
+            insert(library.connections, row.bg.MouseEnter:Connect(function()
+                row.hovered = true
+                paint_row(row, row.id ~= nil and row.id == cfg.selected, true)
+            end))
+
+            insert(library.connections, row.bg.MouseLeave:Connect(function()
+                row.hovered = false
+                paint_row(row, row.id ~= nil and row.id == cfg.selected, false)
+            end))
+
+            insert(library.connections, row.bg.MouseButton1Click:Connect(function()
+                if row.id == nil then
+                    return
+                end
+                cfg.selected = row.id
+                cfg.render()
+                pcall(cfg.on_select, row.id, row.entry)
+            end))
+
+            cfg.rows[index] = row
+            return row
+        end
+
+        function cfg.render()
+            local query = string.lower(cfg.query or "")
+            local shown = 0
+
+            for i = 1, #cfg.entries do
+                local entry = cfg.entries[i]
+                local title = tostring(entry.title or entry.id or "")
+                local hay = string.lower(title .. " " .. tostring(entry.subtitle or ""))
+                if query == "" or string.find(hay, query, 1, true) then
+                    shown = shown + 1
+                    local row = cfg.rows[shown] or build_row(shown)
+                    row.id = entry.id
+                    row.entry = entry
+                    row.frame.LayoutOrder = shown
+                    row.frame.Visible = true
+                    row.title.Text = title
+                    row.sub.Text = tostring(entry.subtitle or "")
+                    paint_row(row, entry.id == cfg.selected, row.hovered == true)
+                end
+            end
+
+            for i = shown + 1, #cfg.rows do
+                local row = cfg.rows[i]
+                row.frame.Visible = false
+                row.id = nil
+                row.entry = nil
+            end
+
+            cfg.row_count = shown
+            items["empty"].Visible = shown == 0
+        end
+
+        function cfg.set_items(list)
+            cfg.entries = type(list) == "table" and list or {}
+            local still_there = false
+            for i = 1, #cfg.entries do
+                if cfg.entries[i].id == cfg.selected then
+                    still_there = true
+                    break
+                end
+            end
+            if not still_there then
+                cfg.selected = nil
+            end
+            cfg.render()
+        end
+
+        function cfg.get_selected()
+            return cfg.selected
+        end
+
+        function cfg.set_selected(id)
+            cfg.selected = id
+            cfg.render()
+        end
+
+        if items["search"] then
+            insert(library.connections, items["search"]:GetPropertyChangedSignal("Text"):Connect(function()
+                cfg.query = items["search"].Text or ""
+                cfg.render()
+            end))
+        end
+
+        cfg.render()
+
+        return setmetatable(cfg, library)
+    end
+
+    function library:model_preview(options)
+        options = options or {}
+
+        local cfg = { items = {}, height = options.height or 190 }
+        local items = cfg.items
+
+        items["holder"] = library:create("Frame", {
+            Parent = self.items["elements"];
+            Name = "\0";
+            BackgroundTransparency = 1;
+            Size = dim2(1, 0, 0, cfg.height + 6);
+            BorderSizePixel = 0;
+        })
+
+        library:create("UIPadding", {
+            Parent = items["holder"];
+            PaddingLeft = dim(0, 4);
+            PaddingRight = dim(0, 4);
+            PaddingTop = dim(0, 3);
+        })
+
+        items["viewport"] = library:create("ViewportFrame", {
+            Parent = items["holder"];
+            Name = "\0";
+            Size = dim2(1, 0, 0, cfg.height);
+            BackgroundColor3 = rgb(18, 18, 20);
+            BorderSizePixel = 0;
+            Ambient = rgb(190, 190, 195);
+            LightColor = rgb(255, 255, 255);
+            LightDirection = Vector3.new(-0.4, -1, -0.6);
+        })
+
+        library:create("UICorner", {
+            Parent = items["viewport"];
+            CornerRadius = dim(0, 5);
+        })
+
+        library:create("UIStroke", {
+            Parent = items["viewport"];
+            Color = ROW_STROKE;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        })
+
+        items["empty"] = library:create("TextLabel", {
+            Parent = items["viewport"];
+            Name = "\0";
+            FontFace = fonts.font;
+            Text = options.empty or "No preview";
+            TextColor3 = TEXT_SUB;
+            TextSize = 13;
+            BackgroundTransparency = 1;
+            Size = dim2(1, 0, 1, 0);
+            BorderSizePixel = 0;
+        })
+
+        items["camera"] = library:create("Camera", {
+            Parent = items["viewport"];
+            FieldOfView = 40;
+        })
+        items["viewport"].CurrentCamera = items["camera"]
+
+        function cfg.clear()
+            if cfg.model then
+                pcall(function()
+                    cfg.model:Destroy()
+                end)
+                cfg.model = nil
+            end
+            items["empty"].Visible = true
+        end
+
+        function cfg.set_model(source)
+            cfg.clear()
+            if typeof(source) ~= "Instance" then
+                return false
+            end
+
+            local ok, clone = pcall(function()
+                local copy = source:Clone()
+                for _, d in ipairs(copy:GetDescendants()) do
+                    if d:IsA("BaseScript") or d:IsA("ModuleScript") or d:IsA("Sound")
+                        or d:IsA("ParticleEmitter") or d:IsA("Light") or d:IsA("Beam")
+                        or d:IsA("Trail") or d:IsA("Fire") or d:IsA("Smoke") then
+                        d:Destroy()
+                    end
+                end
+                return copy
+            end)
+
+            if not ok or not clone then
+                return false
+            end
+
+            clone.Parent = items["viewport"]
+            cfg.model = clone
+            items["empty"].Visible = false
+
+            pcall(function()
+                local pivot, size
+                if clone:IsA("Model") then
+                    pivot, size = clone:GetBoundingBox()
+                else
+                    pivot, size = CFrame.new(clone.Position), clone.Size
+                end
+                local extent = math.max(size.X, size.Y, size.Z)
+                local dist = extent * 1.5 + 2
+                items["camera"].CFrame = CFrame.new(
+                    pivot.Position + Vector3.new(dist * 0.5, extent * 0.12, dist),
+                    pivot.Position
+                )
+            end)
+
+            return true
+        end
+
+        cfg.clear()
+
+        return setmetatable(cfg, library)
+    end
+end
+
+
 return library
