@@ -982,6 +982,8 @@
             items["outline"] = library:create("Frame", {
                 Parent = library["keybind_gui"];
                 Name = "\0";
+                -- Sinks clicks so dragging the HUD panel never reaches the game underneath.
+                Active = true;
                 Position = list.options.position;
                 Size = dim2(0, list.options.width, 0, 38);
                 BorderColor3 = rgb(0, 0, 0);
@@ -1623,6 +1625,7 @@
                 items["outline"] = library:create("Frame", {
                     Parent = library["info_gui"];
                     Name = "\0";
+                    Active = true;
                     Position = dim2(1, -216, 0, 16);
                     Size = dim2(0, info.options.width, 0, 60);
                     BorderColor3 = rgb(0, 0, 0);
@@ -2577,6 +2580,12 @@
                     Parent = library[ "items" ];
                     Size = cfg.size;
                     Name = "\0";
+                    -- Active makes a Frame sink mouse input, which is what sets
+                    -- gameProcessedEvent on the click. A game that respects that flag (BRM5
+                    -- skips every bind whose IgnoreProcessed is false in InputService._handle)
+                    -- then never sees a click that landed on the menu, so you cannot shoot,
+                    -- aim or interact through it.
+                    Active = true;
                     Position = dim2(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2);
                     BorderColor3 = rgb(0, 0, 0);
                     BorderSizePixel = 0;
@@ -4188,6 +4197,7 @@
                         BorderColor3 = rgb(0, 0, 0);
                         Parent = library[ "items" ];
                         Name = "\0";
+                        Active = true;
                         Visible = true;
                         BackgroundTransparency = 1;
                         Size = dim2(0, 0, 0, 0);
@@ -4516,6 +4526,7 @@
                     items[ "colorpicker_holder" ] = library:create( "Frame" , {
                         Parent = library[ "other" ];
                         Name = "\0";
+                        Active = true;
                         Position = dim2(0.20000000298023224, 20, 0.296999990940094, 0);
                         BorderColor3 = rgb(0, 0, 0);
                         Size = dim2(0, 166, 0, 197);
@@ -5200,6 +5211,7 @@
                         BorderColor3 = rgb(0, 0, 0);
                         Parent = library.items;
                         Name = "\0";
+                        Active = true;
                         BackgroundTransparency = 1;
                         Position = dim2(0, 0, 0, 0);
                         Size = dim2(0, 0, 0, 0);
@@ -7806,55 +7818,28 @@ do -- Cursor control
         return false
     end
 
-    -- BRM5's CursorInterface re-asserts MouseIconEnabled/MouseBehavior every frame (hidden +
-    -- LockCenter outside of menus), clobbering plain UserInputService writes. Override its
-    -- per-frame Update so our forced state is the final write each frame. Idempotent + global-guarded.
-    -- GAME-SPECIFIC: gated to the BRM5 universe so the getgc scan/hook never runs (or false-matches)
-    -- in any other game. Elsewhere the generic UserInputService loop below is the only enforcement.
-    function library:_install_cursor_override()
-        local _, g = cursor_refs()
-        if g.MULTYHUB_CURSOR_HOOKED then return true end
-        local in_brm5 = false
-        pcall(function() in_brm5 = game.GameId == 1054526971 end)
-        if not in_brm5 then return false end
-        if type(getgc) ~= "function" then return false end
-
-        local proto
-        pcall(function()
-            for _, v in next, getgc(true) do
-                if type(v) == "table"
-                    and rawget(v, "__index") == v
-                    and type(rawget(v, "Update")) == "function"
-                    and type(rawget(v, "_update")) == "function"
-                    and type(rawget(v, "SetBlockedPosition")) == "function"
-                    and type(rawget(v, "new")) == "function" then
-                    proto = v
-                    break
-                end
-            end
-        end)
-        if not proto then return false end
-
-        local old_update = proto.Update
-        local wrap = (type(newcclosure) == "function" and newcclosure) or function(f) return f end
-        proto.Update = wrap(function(self, ...)
-            old_update(self, ...)
-            local refs = rawget(g, "MULTYHUB_CURSOR_REFS")
-            if refs and next(refs) ~= nil then
-                pcall(function()
-                    uis.MouseIconEnabled = true
-                    uis.MouseBehavior = Enum.MouseBehavior.Default
-                end)
-            end
-        end)
-
-        g.MULTYHUB_CURSOR_HOOKED = true
-        return true
+    -- A game whose client re-asserts MouseIconEnabled/MouseBehavior every frame (BRM5's
+    -- CursorInterface does) will clobber any plain UserInputService write, no matter where in the
+    -- frame it happens. Fighting that from here is a losing race, so instead a game-specific
+    -- provider can register through library:set_cursor_provider and drive the GAME's own cursor
+    -- state (its cursor UI, its icon, its MouseBehavior). The provider is called as
+    -- provider(active) and returns true when it took ownership; anything else falls back to the
+    -- generic UserInputService loop below, which is all a normal Roblox game needs.
+    function library:set_cursor_provider(fn)
+        library._cursor_provider = (type(fn) == "function") and fn or nil
+        library:_update_cursor_force()
     end
 
     function library:_update_cursor_force()
-        if cursor_active() then
-            library:_install_cursor_override()
+        local active = cursor_active()
+        local handled = false
+
+        if library._cursor_provider then
+            local ok, res = pcall(library._cursor_provider, active)
+            handled = ok and res == true
+        end
+
+        if active and not handled then
             if not library._cursor_conn then
                 library._cursor_conn = run.RenderStepped:Connect(function()
                     if cursor_active() then
