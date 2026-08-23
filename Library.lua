@@ -992,6 +992,7 @@
                 Visible = list.options.enabled == true;
                 ClipsDescendants = false;
             })
+            library:_register_scroll_sink(items["outline"])
 
             library:create("UICorner", {
                 Parent = items["outline"];
@@ -1634,6 +1635,7 @@
                     Visible = info.options.enabled == true;
                     ClipsDescendants = false;
                 })
+                library:_register_scroll_sink(items["outline"])
 
                 library:create("UICorner", {
                     Parent = items["outline"];
@@ -2592,6 +2594,7 @@
                     BackgroundColor3 = rgb(14, 14, 16)
                 }); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
                 library._window_main_frame = items[ "main" ]
+                library:_register_scroll_sink(items[ "main" ])
 
                 library:create( "UICorner" , {
                     Parent = items[ "main" ];
@@ -4205,6 +4208,7 @@
                         BackgroundColor3 = rgb(0, 0, 0);
                         ZIndex = 10;
                     });
+                    library:_register_scroll_sink(items[ "dropdown_holder" ])
                     
                     items[ "outline" ] = library:create( "Frame" , {
                         Parent = items[ "dropdown_holder" ];
@@ -4534,6 +4538,7 @@
                         Visible = true;
                         BackgroundColor3 = rgb(25, 25, 29)
                     });
+                    library:_register_scroll_sink(items[ "colorpicker_holder" ])
 
                     items[ "colorpicker_fade" ] = library:create( "Frame" , {
                         Parent = items[ "colorpicker_holder" ];
@@ -5219,6 +5224,7 @@
                         AutomaticSize = Enum.AutomaticSize.X;
                         BackgroundColor3 = rgb(0, 0, 0)
                     });
+                    library:_register_scroll_sink(items[ "dropdown" ])
                     
                     items[ "inline" ] = library:create( "Frame" , {
                         Parent = items[ "dropdown" ];
@@ -7802,6 +7808,106 @@ do -- Scroll Indicators
     end
 end
 
+do -- Scroll capture (which regions of the screen belong to the menu)
+    -- Roblox never flags a MouseWheel event as game-processed for a plain Frame -- only a
+    -- ScrollingFrame under the cursor sinks the wheel, and even that is not something a game is
+    -- obliged to respect. A client that reads the wheel straight off
+    -- UserInputService.InputChanged (BRM5 does, dropping the gameProcessedEvent argument
+    -- outright) therefore keeps zooming the camera while you scroll a menu list. Nothing here
+    -- can cancel an input, so the library only answers "is the cursor over something of mine";
+    -- a game-specific consumer polls that and suppresses its own wheel handling for the frame.
+    library._scroll_sinks = library._scroll_sinks or {}
+
+    -- Every region registered here is one the menu owns for input purposes -- in practice the
+    -- same objects that carry Active = true so their clicks never reach the game.
+    function library:_register_scroll_sink(inst)
+        if typeof(inst) ~= "Instance" or not inst:IsA("GuiObject") then
+            return inst
+        end
+        local sinks = library._scroll_sinks
+        for i = 1, #sinks do
+            if sinks[i] == inst then
+                return inst
+            end
+        end
+        sinks[#sinks + 1] = inst
+        return inst
+    end
+
+    -- Public: a consumer with its own GUI (a chat log, a custom HUD panel) registers it here so
+    -- the wheel is swallowed over that too.
+    function library:add_scroll_sink(inst)
+        return library:_register_scroll_sink(inst)
+    end
+
+    function library:remove_scroll_sink(inst)
+        local sinks = library._scroll_sinks
+        for i = #sinks, 1, -1 do
+            if sinks[i] == inst then
+                table.remove(sinks, i)
+            end
+        end
+    end
+
+    -- nil = the object is gone and should be dropped from the list, false = miss, true = hit.
+    local function sink_hit(inst, x, y)
+        if not inst.Parent then
+            return nil
+        end
+        if not inst.Visible then
+            return false
+        end
+        local size = inst.AbsoluteSize
+        if size.X <= 0 or size.Y <= 0 then
+            return false
+        end
+        local pos = inst.AbsolutePosition
+        if x < pos.X or y < pos.Y or x > pos.X + size.X or y > pos.Y + size.Y then
+            return false
+        end
+        local node = inst.Parent
+        while node do
+            if node:IsA("ScreenGui") then
+                return node.Enabled == true
+            end
+            if node:IsA("GuiObject") and not node.Visible then
+                return false
+            end
+            node = node.Parent
+        end
+        return false
+    end
+
+    -- True while the cursor sits over a menu-owned region. Cheap enough to call once a frame:
+    -- one mouse read plus a rect test per registered region (there are under a dozen).
+    function library:mouse_over_gui()
+        local sinks = library._scroll_sinks
+        local count = #sinks
+        if count == 0 then
+            return false
+        end
+        local ok, mouse = pcall(uis.GetMouseLocation, uis)
+        if not ok or typeof(mouse) ~= "Vector2" then
+            return false
+        end
+        -- AbsolutePosition is measured in inset-relative space on every ScreenGui regardless of
+        -- IgnoreGuiInset, while GetMouseLocation includes the topbar -- so the inset always comes
+        -- off the mouse, never off the rect.
+        local inset = gui_service:GetGuiInset()
+        local x, y = mouse.X - inset.X, mouse.Y - inset.Y
+        local hovered = false
+        for i = count, 1, -1 do
+            local hit = sink_hit(sinks[i], x, y)
+            if hit == nil then
+                table.remove(sinks, i)
+            elseif hit then
+                hovered = true
+            end
+        end
+        return hovered
+    end
+end
+
 do -- Cursor control
     -- Source set is shared via getgenv so the key UI prefix, the welcome modal and the menu
     -- toggle all coordinate; the cursor stays forced while the set is non-empty (handoff never drops).
@@ -8476,6 +8582,7 @@ do -- Modal Dialog (universal)
             Size = dim2(1, 0, 1, 0);
             ZIndex = 900;
         })
+        library:_register_scroll_sink(modal.root)
 
         modal.card = library:create("Frame", {
             Parent = modal.root;
