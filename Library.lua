@@ -7808,7 +7808,7 @@ do -- Scroll Indicators
     end
 end
 
-do -- Scroll capture (which regions of the screen belong to the menu)
+do -- Menu input ownership (which regions and inputs belong to the menu)
     -- Roblox never flags a MouseWheel event as game-processed for a plain Frame -- only a
     -- ScrollingFrame under the cursor sinks the wheel, and even that is not something a game is
     -- obliged to respect. A client that reads the wheel straight off
@@ -7905,6 +7905,29 @@ do -- Scroll capture (which regions of the screen belong to the menu)
             end
         end
         return hovered
+    end
+
+    -- True while a TextBox the menu owns has keyboard focus. Same class of leak as the wheel:
+    -- Roblox flags keystrokes as game-processed while a PlayerGui TextBox is focused, but the
+    -- menu lives in CoreGui and does not get that treatment, so typing into the search box or a
+    -- config name fires every single-key gameplay bind underneath.
+    function library:owns_focused_textbox()
+        local ok, box = pcall(uis.GetFocusedTextBox, uis)
+        if not ok or typeof(box) ~= "Instance" then
+            return false
+        end
+        local roots = { library["items"], library["other"], library["notif_gui"],
+                        library["keybind_gui"], library["info_gui"] }
+        local node = box
+        while node do
+            for i = 1, #roots do
+                if roots[i] ~= nil and node == roots[i] then
+                    return true
+                end
+            end
+            node = node.Parent
+        end
+        return false
     end
 end
 
