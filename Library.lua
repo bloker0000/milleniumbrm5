@@ -5,7 +5,7 @@
     -> Edited by "@.multyply" to work with "MultyHub"
 ]]
 
--- Variables 
+-- Variables
     local uis = game:GetService("UserInputService") 
     local players = game:GetService("Players") 
     local ws = game:GetService("Workspace")
@@ -63,7 +63,6 @@
     local find = table.find 
     local remove = table.remove
     local concat = table.concat
--- 
 
 -- Library init
     getgenv().library = {
@@ -292,9 +291,8 @@
             font = font;
         }
     end
---
 
--- Library functions 
+-- Library functions
     -- Misc functions
         function library:tween(obj, properties, easing_style, time) 
             local tween = tween_service:Create(obj, TweenInfo.new(time or 0.25, easing_style or Enum.EasingStyle.Quint, Enum.EasingDirection.InOut, 0, false, 0), properties):Play()
@@ -516,8 +514,7 @@
         end
 
         function library:_brm5_sync_autoload()
-            -- NOTE: the toggle control writes flags[flag] AFTER firing its callback, so read
-            -- the control's live .enabled field instead of the (stale) flag value here.
+            -- toggle writes flags[flag] AFTER its callback, so read .enabled not the flag
             local enabled = autoload_toggle ~= nil and autoload_toggle.enabled == true
             local name = flags["config_autoload_name"]
             if type(name) == "table" then
@@ -617,7 +614,7 @@
 
             for _, v in next, flags do
                 if _ == "config_autoload_enabled" or _ == "config_autoload_name" then
-                    -- auto-load target lives only in autoload.txt; never bake it into a saved config
+                    -- autoload target lives in autoload.txt only, never in a saved config
                 elseif type(v) == "table" and v.key then
                     Config[_] = {active = v.active, mode = v.mode, key = tostring(v.key)}
                 elseif type(v) == "table" and v["Transparency"] and v["Color"] then
@@ -800,11 +797,21 @@
             end
         end 
 
+        -- Parent goes last -- written mid-loop, every property after it dirties layout.
         function library:create(instance, options)
             local ins = Instance.new(instance) 
+            local parent = nil
             
             for prop, value in options do 
-                ins[prop] = value
+                if prop == "Parent" then
+                    parent = value
+                else
+                    ins[prop] = value
+                end
+            end
+            
+            if parent ~= nil then
+                ins.Parent = parent
             end
             
             return ins 
@@ -982,7 +989,7 @@
             items["outline"] = library:create("Frame", {
                 Parent = library["keybind_gui"];
                 Name = "\0";
-                -- Sinks clicks so dragging the HUD panel never reaches the game underneath.
+                -- Active sinks the click so it never reaches the game
                 Active = true;
                 Position = list.options.position;
                 Size = dim2(0, list.options.width, 0, 38);
@@ -1471,7 +1478,7 @@
             return list
         end
 
-        -- Info panel (watermark / live informatics HUD)
+        -- Info panel
         do
             local INFO_ORDER = {
                 "fps", "avg_fps", "min_fps", "max_fps", "ping", "memory",
@@ -1496,17 +1503,18 @@
 
             local INFO_FPS_WINDOW = 60
             local INFO_FPS_UPDATE_INTERVAL = 0.1
+            -- 240Hz x 60s ceiling; slower clients just use less of it
+            local INFO_SAMPLE_CAP = 240 * INFO_FPS_WINDOW
+            local INFO_HIST_CAP = math.ceil(INFO_FPS_WINDOW / INFO_FPS_UPDATE_INTERVAL) + 8
 
-            -- Header geometry used to let the title "own" the panel width.
             local INFO_TITLE_SIZE = 15
-            local INFO_TITLE_LEFT_PAD = 10   -- title x offset
-            local INFO_TITLE_GAP = 16        -- whitespace between title and the INFO label
-            local INFO_TITLE_ACCENT_AREA = 42 -- room reserved for the right-aligned "INFO"
-            local INFO_TITLE_MAX_WIDTH = 500  -- sane cap; TextTruncate still guards past this
+            local INFO_TITLE_LEFT_PAD = 10
+            local INFO_TITLE_GAP = 16
+            local INFO_TITLE_ACCENT_AREA = 42 -- room for the right-aligned "INFO"
+            local INFO_TITLE_MAX_WIDTH = 500
 
             local info_text_service = game:GetService("TextService")
 
-            -- Full (untruncated) pixel width of the title text in the real header font.
             local function measure_info_title_width(text, font)
                 local ok, bounds = pcall(function()
                     local params = Instance.new("GetTextBoundsParams")
@@ -1519,7 +1527,7 @@
                 if ok and bounds and bounds.X then
                     return bounds.X
                 end
-                return #tostring(text) * (INFO_TITLE_SIZE * 0.6) -- rough fallback if the API fails
+                return #tostring(text) * (INFO_TITLE_SIZE * 0.6) -- rough fallback
             end
 
             local function default_info_options()
@@ -1564,8 +1572,14 @@
                         rows = {},
                         cols = {},
                         values = {},
-                        fps_samples = {},
-                        fps_hist = {},
+                        -- ring buffers, not growing arrays
+                        fps_samples = table.create(INFO_SAMPLE_CAP),
+                        fps_sample_head = 0,
+                        fps_sample_count = 0,
+                        fps_hist_t = table.create(INFO_HIST_CAP),
+                        fps_hist_v = table.create(INFO_HIST_CAP),
+                        fps_hist_head = 0,
+                        fps_hist_count = 0,
                         fps_now = 0,
                         fps_min = nil,
                         fps_max = nil,
@@ -1883,8 +1897,7 @@
                 items["title"].Text = tostring(opts.watermark or "MultyHub")
                 items["title_accent"].TextColor3 = themes.preset.accent
 
-                -- Measure the untruncated title width once per unique watermark (off the hot
-                -- path), then relayout so the panel can grow to fit it. Cached per watermark.
+                -- measured once per watermark, off the hot path
                 if show_title then
                     local wm = tostring(opts.watermark or "MultyHub")
                     if info._title_src ~= wm then
@@ -1996,10 +2009,7 @@
 
                 local panel_width = (2 * side_pad) + (num_cols * col_width) + ((num_cols - 1) * col_gap)
 
-                -- Title owns the width: if the title (+ whitespace + INFO label) needs more room
-                -- than the columns give it, widen the panel and stretch the columns so the title
-                -- never truncates. Only fires when the title overflows, so short-title panels
-                -- (e.g. other games using this library) are left exactly as they were.
+                -- widen the panel if the title outgrows the columns
                 local title_min = (show_title and info._title_min_width) or 0
                 if title_min > INFO_TITLE_MAX_WIDTH then
                     title_min = INFO_TITLE_MAX_WIDTH
@@ -2044,22 +2054,37 @@
                     return
                 end
 
+                -- Runs every frame the panel is on. Hence ring buffers: no alloc, no O(n) shift.
                 local now = os.clock()
-                local samples = info.fps_samples
-                samples[#samples + 1] = now
                 local sample_cutoff = now - INFO_FPS_WINDOW
-                while samples[1] and samples[1] < sample_cutoff do
-                    remove(samples, 1)
-                end
 
+                local samples = info.fps_samples
+                local s_head = info.fps_sample_head
+                local s_count = info.fps_sample_count
+                s_head = s_head % INFO_SAMPLE_CAP + 1
+                samples[s_head] = now
+                if s_count < INFO_SAMPLE_CAP then
+                    s_count = s_count + 1
+                end
+                info.fps_sample_head = s_head
+                info.fps_sample_count = s_count
+
+                -- Walk back from the newest; out-of-window entries are never visited.
                 local fps = 0
                 local current_cutoff = now - 1
-                for i = #samples, 1, -1 do
-                    if samples[i] < current_cutoff then
+                local live_samples = 0
+                for i = 1, s_count do
+                    local idx = (s_head - i) % INFO_SAMPLE_CAP + 1
+                    local t = samples[idx]
+                    if not t or t < sample_cutoff then
                         break
                     end
-                    fps = fps + 1
+                    live_samples = live_samples + 1
+                    if t >= current_cutoff then
+                        fps = fps + 1
+                    end
                 end
+                info.fps_sample_count = live_samples
                 info.fps_now = fps
 
                 if now - info.last_update < INFO_FPS_UPDATE_INTERVAL then
@@ -2067,22 +2092,29 @@
                 end
                 info.last_update = now
 
-                local hist = info.fps_hist
+                local hist_t = info.fps_hist_t
+                local hist_v = info.fps_hist_v
+                local h_head = info.fps_hist_head
+                local h_count = info.fps_hist_count
                 if now >= info.warmup_until and fps > 0 then
-                    hist[#hist + 1] = { t = now, fps = fps }
-                end
-                while hist[1] do
-                    local first = hist[1]
-                    local t = type(first) == "table" and first.t or nil
-                    if t and t >= sample_cutoff then
-                        break
+                    h_head = h_head % INFO_HIST_CAP + 1
+                    hist_t[h_head] = now
+                    hist_v[h_head] = fps
+                    if h_count < INFO_HIST_CAP then
+                        h_count = h_count + 1
                     end
-                    remove(hist, 1)
+                    info.fps_hist_head = h_head
+                    info.fps_hist_count = h_count
                 end
 
                 local sum, count, min_fps, max_fps = 0, 0, nil, nil
-                for _, entry in hist do
-                    local value = type(entry) == "table" and entry.fps or entry
+                for i = 1, h_count do
+                    local idx = (h_head - i) % INFO_HIST_CAP + 1
+                    local t = hist_t[idx]
+                    if not t or t < sample_cutoff then
+                        break
+                    end
+                    local value = hist_v[idx]
                     if type(value) == "number" then
                         sum = sum + value
                         count = count + 1
@@ -2094,6 +2126,7 @@
                         end
                     end
                 end
+                info.fps_hist_count = count
 
                 if count == 0 then
                     sum = fps
@@ -2522,7 +2555,6 @@
             
             library = nil 
         end 
-    --
     
     -- Library element functions
         function library:window(properties)
@@ -2582,11 +2614,7 @@
                     Parent = library[ "items" ];
                     Size = cfg.size;
                     Name = "\0";
-                    -- Active makes a Frame sink mouse input, which is what sets
-                    -- gameProcessedEvent on the click. A game that respects that flag (BRM5
-                    -- skips every bind whose IgnoreProcessed is false in InputService._handle)
-                    -- then never sees a click that landed on the menu, so you cannot shoot,
-                    -- aim or interact through it.
+                    -- Active sinks the click so it never reaches the game underneath
                     Active = true;
                     Position = dim2(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2);
                     BorderColor3 = rgb(0, 0, 0);
@@ -2628,8 +2656,7 @@
                     end)
                 end
 
-                -- Tiled background pattern (first visual child so it sits behind all content).
-                -- Its own UICorner matches the window radius so the tiling never pokes past corners.
+                -- tiled backdrop, first child so it sits behind everything
                 library._window_background = library:create( "ImageLabel" , {
                     Parent = items[ "main" ];
                     Name = "\0";
@@ -2859,14 +2886,6 @@
             end
 
             function cfg.toggle_menu(bool) 
-                -- WIP 
-                -- if cfg.tween then 
-                --     cfg.tween:Cancel()
-                -- end 
-
-                -- items[ "main" ].Size = dim2(items[ "main" ].Size.Scale.X, items[ "main" ].Size.Offset.X - 20, items[ "main" ].Size.Scale.Y, items[ "main" ].Size.Offset.Y - 20)
-                -- library:tween(items[ "tab_holder" ], {Size = dim2(1, -196, 1, -81)}, Enum.EasingStyle.Quad, 0.4)
-                -- cfg.tween = 
                 
                 if bool == nil then
                     bool = not library[ "items" ].Enabled
@@ -2883,7 +2902,7 @@
                 name = properties.name or properties.Name or "visuals"; 
                 icon = properties.icon or properties.Icon or "http://www.roblox.com/asset/?id=6034767608";
                 
-                -- multi 
+                -- multi
                 tabs = properties.tabs or properties.Tabs or {"Main", "Misc.", "Settings"};
                 pages = {}; -- data store for multi sections
                 current_multi; 
@@ -2905,7 +2924,7 @@
                     BackgroundColor3 = rgb(255, 255, 255)
                 });
                 
-                -- Tab buttons 
+                -- Tab buttons
                     items[ "button" ] = library:create( "TextButton" , {
                         FontFace = fonts.font;
                         TextColor3 = rgb(255, 255, 255);
@@ -2969,7 +2988,6 @@
                         Enabled = false;
                         ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                     });
-                -- 
 
                 -- Multi Sections
                     items[ "multi_section_button_holder" ] = library:create( "ScrollingFrame" , {
@@ -3074,9 +3092,8 @@
                                     Parent = multi_items[ "button" ];
                                     CornerRadius = dim(0, 7)
                                 }); 
-                            --
 
-                            -- Tab 
+                            -- Tab
                                 multi_items[ "tab" ] = library:create( "ScrollingFrame" , {
                                     Parent = library.cache;
                                     BackgroundTransparency = 1;
@@ -3109,7 +3126,6 @@
                                     PaddingRight = dim(0, 7);
                                     PaddingLeft = dim(0, 7)
                                 });
-                            --
                         end
 
                         data.text = multi_items[ "name" ]
@@ -3118,9 +3134,6 @@
                         data.page = multi_items[ "tab" ]
                         data.parent = setmetatable(data, library):sub_tab({}).items[ "tab_parent" ]
                         
-                        -- Old column code
-                        -- data.left = multi_items[ "left" ]
-                        -- data.right = multi_items[ "right" ]
 
 						function data.open_page()
 							local page = cfg.current_multi; 
@@ -3167,7 +3180,6 @@
                     end
 
                     cfg.pages[1].open_page()
-                --
             end 
 
             function cfg.open_tab() 
@@ -3255,7 +3267,7 @@
             return setmetatable(cfg, library)
         end 
 
-        -- Miscellaneous 
+        -- Miscellaneous
             function library:column(properties) 
                 local cfg = {items = {}, size = properties.size or 1}
 
@@ -3276,9 +3288,7 @@
                         Parent = items[ "column" ]
                     });
 
-                    -- Columns are 0-width and rely on the parent's HorizontalFlex.
-                    -- Without an explicit flex basis, a TextWrapped label's unwrapped
-                    -- text drives the column's content width and overflows the tab.
+                    -- 0-width, sized by the parent HorizontalFlex
                     pcall(function()
                         library:create( "UIFlexItem" , {
                             Parent = items[ "column" ];
@@ -3325,7 +3335,6 @@
 
                 return setmetatable(cfg, library)
             end 
-        --
 
         function library:section(properties)
             local cfg = {
@@ -3763,7 +3772,6 @@
                             CornerRadius = dim(0, 999)
                         });                        
                     end 
-                --                
             end;
             
             function cfg.set(bool)
@@ -3800,7 +3808,7 @@
                 cfg.set(cfg.enabled)
             end)
             
-            if cfg.seperator then -- ok bro my lua either sucks or this was a pain in the ass to make (simple if statement aswell 💔)
+            if cfg.seperator then
                 library:create( "Frame" , {
                     AnchorPoint = vec2(0, 1);
                     Parent = self.items[ "elements" ];
@@ -3894,7 +3902,7 @@
                     BackgroundColor3 = rgb(255, 255, 255)
                 });
 
-                do -- keep the bar below the label when `info` wraps it onto extra lines
+                do -- keeps the bar below the label when `info` wraps it
                     local name_label = items[ "name" ]
                     local right_components = items[ "right_components" ]
                     local last_offset = nil
@@ -4063,7 +4071,7 @@
 
                 width = options.width or 130;
 
-                -- Ignore these 
+                -- Ignore these
                 open = false;
                 option_instances = {};
                 multi_items = {};
@@ -4193,7 +4201,6 @@
                         BorderSizePixel = 0;
                         BackgroundColor3 = rgb(255, 255, 255)
                     });
-                -- 
 
                 -- Element Holder
                     items[ "dropdown_holder" ] = library:create( "Frame" , {
@@ -4237,7 +4244,6 @@
                         Parent = items[ "outline" ];
                         CornerRadius = dim(0, 4)
                     });
-                -- 
             end 
 
             function cfg.render_option(text)
@@ -4311,7 +4317,7 @@
 
                 for _, option in list do 
                     local button = cfg.render_option(option)
-                    cfg.y_size += button.AbsoluteSize.Y + 6 -- super annoying manual sizing but oh well
+                    cfg.y_size += button.AbsoluteSize.Y + 6
                     insert(cfg.option_instances, button)
                     
                     button.MouseButton1Down:Connect(function()
@@ -4453,7 +4459,7 @@
                 name = options.name or "Color", 
                 flag = options.flag or library:next_flag(),
 
-                color = options.color or color(1, 1, 1), -- Default to white color if not provided
+                color = options.color or color(1, 1, 1),
                 alpha = options.alpha and 1 - options.alpha or 0,
                 
                 open = false, 
@@ -4524,7 +4530,6 @@
                         Color = rgbseq{rgbkey(0, rgb(211, 211, 211)), rgbkey(1, rgb(211, 211, 211))};
                         Parent = items[ "colorpicker_inline" ]
                     });         
-                --
                 
                 -- Colorpicker
                     items[ "colorpicker_holder" ] = library:create( "Frame" , {
@@ -4799,12 +4804,11 @@
                         CornerRadius = dim(0, 3)
                     });
                     
-                    items[ "UICorenr" ] = library:create( "UICorner" , { -- fire misstypo (im not fixing this RAWR)
+                    items[ "UICorenr" ] = library:create( "UICorner" , { -- typo'd key, leave it
                         Parent = items[ "colorpicker_holder" ];
                         Name = "\0";
                         CornerRadius = dim(0, 4)
                     });
-                --                  
             end;
 
             function cfg.set_visible(bool)
@@ -4813,7 +4817,7 @@
                 items[ "colorpicker_holder" ].Position = dim_offset(items[ "colorpicker" ].AbsolutePosition.X, items[ "colorpicker" ].AbsolutePosition.Y + items[ "colorpicker" ].AbsoluteSize.Y + 45)
 
                 library:tween(items[ "colorpicker_fade" ], {BackgroundTransparency = 1}, Enum.EasingStyle.Quad, 0.4)
-                library:tween(items[ "colorpicker_holder" ], {Position = items[ "colorpicker_holder" ].Position + dim_offset(0, 20)}) -- p100 check
+                library:tween(items[ "colorpicker_holder" ], {Position = items[ "colorpicker_holder" ].Position + dim_offset(0, 20)})
                 
                 if not (self.sanity and library.current_open == self and self.open) then 
                     library:close_element(cfg)
@@ -4848,13 +4852,11 @@
                 
                 local Color = hsv(h, s, v)
 
-                -- Ok so quick story, should I cache any of this? no...?? anyways I know this code is very bad but its your fault for buying a ui with animations (on a serious note im too lazy to make this look nice)
-                -- Also further note, yeah I kind of did this scale_factor * size-valuesize.plane because then I would have to do tomfoolery to make it clip properly.
                 library:tween(items[ "hue_picker" ], {Position = dim2(0, (items[ "hue_gradient" ].AbsoluteSize.X - items[ "hue_picker" ].AbsoluteSize.X) * h, 0.5, 0)}, Enum.EasingStyle.Linear, 0.05)
                 library:tween(items[ "alpha_picker" ], {Position = dim2(0, (items[ "alpha_gradient" ].AbsoluteSize.X - items[ "alpha_picker" ].AbsoluteSize.X) * (1 - a), 0.5, 0)}, Enum.EasingStyle.Linear, 0.05)
                 library:tween(items[ "satvalpicker" ], {Position = dim2(0, s * (items[ "saturation_holder" ].AbsoluteSize.X - items[ "satvalpicker" ].AbsoluteSize.X), 1, 1 - v * (items[ "saturation_holder" ].AbsoluteSize.Y - items[ "satvalpicker" ].AbsoluteSize.Y))}, Enum.EasingStyle.Linear, 0.05)
 
-                items[ "alpha_indicator" ]:FindFirstChildOfClass("UIGradient").Color = rgbseq{rgbkey(0, rgb(112, 112, 112)), rgbkey(1, hsv(h, 1, 1))}; -- shit code
+                items[ "alpha_indicator" ]:FindFirstChildOfClass("UIGradient").Color = rgbseq{rgbkey(0, rgb(112, 112, 112)), rgbkey(1, hsv(h, 1, 1))};
                 
                 items[ "colorpicker" ].BackgroundColor3 = Color
                 items[ "colorpicker_inline" ].BackgroundColor3 = Color
@@ -5209,7 +5211,6 @@
                         PaddingRight = dim(0, 5);
                         PaddingLeft = dim(0, 5)
                     });                                  
-                -- 
                 
                 -- Mode Holder
                     items[ "dropdown" ] = library:create( "Frame" , {
@@ -5292,10 +5293,9 @@
                             cfg.open = false
                         end)
                     end
-                -- 
             end 
             
-            function cfg.modify_mode_color(path) -- ts so frikin tuff 💀
+            function cfg.modify_mode_color(path)
                 for _, v in cfg.hold_instances do 
                     v.TextColor3 = rgb(72, 72, 72)
                 end 
@@ -5500,7 +5500,7 @@
             local cfg = {
                 open = false; 
                 items = {}; 
-                sanity = true; -- made this for my own sanity.
+                sanity = true;
             }
 
             local items = cfg.items; do 
@@ -5626,12 +5626,12 @@
                 });
             end 
 
-            function cfg.refresh_options(options_to_refresh) -- ignore goofy parameter
+            function cfg.refresh_options(options_to_refresh)
                 for _,option in cfg.data_store do 
                     option:Destroy()
                 end
 
-                for _, option_data in options_to_refresh do -- haha u skids no next >_<
+                for _, option_data in options_to_refresh do
                     local button = library:create( "TextButton" , {
                         FontFace = fonts.small;
                         TextColor3 = rgb(0, 0, 0);
@@ -5992,7 +5992,6 @@
             guard_keybind_list_setter("keybind_list_auto_height", keybind_list_auto_height)
             force_keybind_list_defaults()
         end
-    --
 
     -- Notification Library
         function notifications:refresh_notifs() 
@@ -6150,7 +6149,6 @@
                 items[ "notification" ]:Destroy() 
             end)
         end
-    --
 
     -- Reorderable list
         function library:reorderable_list(options)
@@ -6543,7 +6541,6 @@
 
             return setmetatable(rl_cfg, library)
         end
-    --
 
     -- Searchable toggle list
         function library:searchable_toggle_list(options)
@@ -7055,8 +7052,6 @@
 
             return setmetatable(cfg, library)
         end
-    --
--- 
 do -- Menu Search
     local SEARCH_BAR_WIDTH = 200
     local SEARCH_RESERVE = SEARCH_BAR_WIDTH + 24
@@ -7808,18 +7803,11 @@ do -- Scroll Indicators
     end
 end
 
-do -- Menu input ownership (which regions and inputs belong to the menu)
-    -- Roblox never flags a MouseWheel event as game-processed for a plain Frame -- only a
-    -- ScrollingFrame under the cursor sinks the wheel, and even that is not something a game is
-    -- obliged to respect. A client that reads the wheel straight off
-    -- UserInputService.InputChanged (BRM5 does, dropping the gameProcessedEvent argument
-    -- outright) therefore keeps zooming the camera while you scroll a menu list. Nothing here
-    -- can cancel an input, so the library only answers "is the cursor over something of mine";
-    -- a game-specific consumer polls that and suppresses its own wheel handling for the frame.
+do -- Menu input ownership
+    -- Nothing can cancel an input, so this only answers "is the cursor over one of mine".
     library._scroll_sinks = library._scroll_sinks or {}
 
-    -- Every region registered here is one the menu owns for input purposes -- in practice the
-    -- same objects that carry Active = true so their clicks never reach the game.
+    -- Regions the menu owns for input -- in practice the same objects that carry Active.
     function library:_register_scroll_sink(inst)
         if typeof(inst) ~= "Instance" or not inst:IsA("GuiObject") then
             return inst
@@ -7834,8 +7822,7 @@ do -- Menu input ownership (which regions and inputs belong to the menu)
         return inst
     end
 
-    -- Public: a consumer with its own GUI (a chat log, a custom HUD panel) registers it here so
-    -- the wheel is swallowed over that too.
+    -- Public: register your own GUI (chat log, custom HUD) to get the same treatment.
     function library:add_scroll_sink(inst)
         return library:_register_scroll_sink(inst)
     end
@@ -7849,7 +7836,7 @@ do -- Menu input ownership (which regions and inputs belong to the menu)
         end
     end
 
-    -- nil = the object is gone and should be dropped from the list, false = miss, true = hit.
+    -- nil = gone, drop it. false = miss. true = hit.
     local function sink_hit(inst, x, y)
         if not inst.Parent then
             return nil
@@ -7878,8 +7865,7 @@ do -- Menu input ownership (which regions and inputs belong to the menu)
         return false
     end
 
-    -- True while the cursor sits over a menu-owned region. Cheap enough to call once a frame:
-    -- one mouse read plus a rect test per registered region (there are under a dozen).
+    -- Cheap enough to call once a frame: a rect test per region, under a dozen of them.
     function library:mouse_over_gui()
         local sinks = library._scroll_sinks
         local count = #sinks
@@ -7890,9 +7876,7 @@ do -- Menu input ownership (which regions and inputs belong to the menu)
         if not ok or typeof(mouse) ~= "Vector2" then
             return false
         end
-        -- AbsolutePosition is measured in inset-relative space on every ScreenGui regardless of
-        -- IgnoreGuiInset, while GetMouseLocation includes the topbar -- so the inset always comes
-        -- off the mouse, never off the rect.
+        -- AbsolutePosition is inset-relative, GetMouseLocation is not -- so take it off the mouse.
         local inset = gui_service:GetGuiInset()
         local x, y = mouse.X - inset.X, mouse.Y - inset.Y
         local hovered = false
@@ -7907,10 +7891,7 @@ do -- Menu input ownership (which regions and inputs belong to the menu)
         return hovered
     end
 
-    -- True while a TextBox the menu owns has keyboard focus. Same class of leak as the wheel:
-    -- Roblox flags keystrokes as game-processed while a PlayerGui TextBox is focused, but the
-    -- menu lives in CoreGui and does not get that treatment, so typing into the search box or a
-    -- config name fires every single-key gameplay bind underneath.
+    -- CoreGui textboxes never get the game-processed flag, so typing fires gameplay binds.
     function library:owns_focused_textbox()
         local ok, box = pcall(uis.GetFocusedTextBox, uis)
         if not ok or typeof(box) ~= "Instance" then
@@ -7932,8 +7913,7 @@ do -- Menu input ownership (which regions and inputs belong to the menu)
 end
 
 do -- Cursor control
-    -- Source set is shared via getgenv so the key UI prefix, the welcome modal and the menu
-    -- toggle all coordinate; the cursor stays forced while the set is non-empty (handoff never drops).
+    -- Shared via getgenv so the key UI, welcome modal and menu toggle all coexist.
     local function cursor_refs()
         local g = (type(getgenv) == "function" and getgenv()) or _G
         g.MULTYHUB_CURSOR_REFS = g.MULTYHUB_CURSOR_REFS or {}
@@ -7947,13 +7927,7 @@ do -- Cursor control
         return false
     end
 
-    -- A game whose client re-asserts MouseIconEnabled/MouseBehavior every frame (BRM5's
-    -- CursorInterface does) will clobber any plain UserInputService write, no matter where in the
-    -- frame it happens. Fighting that from here is a losing race, so instead a game-specific
-    -- provider can register through library:set_cursor_provider and drive the GAME's own cursor
-    -- state (its cursor UI, its icon, its MouseBehavior). The provider is called as
-    -- provider(active) and returns true when it took ownership; anything else falls back to the
-    -- generic UserInputService loop below, which is all a normal Roblox game needs.
+    -- A game that re-asserts the cursor each frame clobbers a plain UIS write, so it can drive its own.
     function library:set_cursor_provider(fn)
         library._cursor_provider = (type(fn) == "function") and fn or nil
         library:_update_cursor_force()
@@ -7988,8 +7962,7 @@ do -- Cursor control
         end
     end
 
-    -- Force the mouse cursor visible + unlocked while at least one source is active.
-    -- Ref-set keyed by source so multiple callers (menu toggle, welcome modal, ...) coexist.
+    -- Ref-set keyed by source so multiple callers coexist.
     function library:set_force_cursor(source, on)
         local refs = cursor_refs()
         refs[tostring(source or "default")] = on and true or nil
@@ -8000,8 +7973,7 @@ do -- Cursor control
         return cursor_active()
     end
 
-    -- The "user" toggle only forces the cursor while the menu is actually open. Other sources
-    -- (welcome modal, key UI) stay unconditional since they are the visible UI at those moments.
+    -- "user" only forces while the menu is open; other sources are unconditional.
     function library:_is_menu_open()
         local items = library["items"]
         return items ~= nil and items.Enabled == true
@@ -8025,7 +7997,7 @@ do -- Cursor control
     end
 end
 
-do -- Background patterns (tileable window backdrops, inspired by Bracket / Parvus)
+do -- Background patterns
     library._bg_patterns = {
         ["None"] = "",
         ["Multy"] = "rbxassetid://76910539512771",
@@ -8039,9 +8011,7 @@ do -- Background patterns (tileable window backdrops, inspired by Bracket / Parv
     }
     library._bg_pattern_order = { "None", "Multy", "Floral", "Hexagons", "Circles", "Hearts", "Topography", "Water", "Feet" }
 
-    -- ImageLabel.Image renders the underlying TEXTURE, but IDs copied from the marketplace are
-    -- often Decal/asset IDs that don't render directly. Resolve each id to its real texture once
-    -- (via GetObjects -> Decal.Texture), cache it, and fall back to the raw id on failure.
+    -- Marketplace IDs are often Decals, not textures. Resolve once, cache, fall back to raw.
     library._texture_cache = library._texture_cache or {}
     function library:_resolve_texture(raw)
         if type(raw) ~= "string" or raw == "" then return "" end
@@ -8072,7 +8042,6 @@ do -- Background patterns (tileable window backdrops, inspired by Bracket / Parv
         return raw
     end
 
-    -- Applies the saved background-pattern flags to the window backdrop ImageLabel.
     function library:_apply_window_background()
         local bg = library._window_background
         if not bg then return end
@@ -8103,7 +8072,7 @@ do -- Background patterns (tileable window backdrops, inspired by Bracket / Parv
 end
 
 
-do -- Rich List + Model Preview (universal controls)
+do -- Rich List + Model Preview
 
     local ROW_BG          = rgb(22, 22, 24)
     local ROW_BG_ACTIVE   = rgb(25, 25, 29)
@@ -8558,7 +8527,7 @@ do -- Rich List + Model Preview (universal controls)
 end
 
 
-do -- Modal Dialog (universal)
+do -- Modal Dialog
 
     local CARD_BG       = rgb(14, 14, 16)
     local CARD_STROKE   = rgb(26, 26, 32)
