@@ -77,6 +77,15 @@
         notifications = {notifs = {}},
         current_open;
         _loading_config = false; 
+
+        -- Sit above the game's UI, which sorts in the same DisplayOrder space.
+        display_order = {
+            window = 999100,
+            popup = 999200,
+            notification = 999300,
+            hud = 999400,
+            modal = 999500,
+        },
     }
 
     local themes = {
@@ -978,6 +987,7 @@
                     Name = "multyhub_keybinds";
                     Enabled = list.options.enabled == true;
                     ZIndexBehavior = Enum.ZIndexBehavior.Global;
+                    DisplayOrder = library.display_order.hud;
                     IgnoreGuiInset = true;
                 })
             end
@@ -1629,6 +1639,7 @@
                         Name = "multyhub_info";
                         Enabled = info.options.enabled == true;
                         ZIndexBehavior = Enum.ZIndexBehavior.Global;
+                        DisplayOrder = library.display_order.hud;
                         IgnoreGuiInset = true;
                     })
                 end
@@ -2562,6 +2573,7 @@
             library._search_pages = {}
             library._search_result_pool = {}
             library._menu_search_built = false
+            library._keybind_capture = nil
 
             if library._scroll_fade_conn then
                 pcall(function()
@@ -2589,6 +2601,7 @@
                 Name = "multyhub";
                 Enabled = true;
                 ZIndexBehavior = Enum.ZIndexBehavior.Global;
+                DisplayOrder = library.display_order.window;
                 IgnoreGuiInset = true;
             });
             pcall(function() library:_bind_cursor_menu() end)
@@ -2598,6 +2611,7 @@
                 Name = "multyhub";
                 Enabled = false;
                 ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
+                DisplayOrder = library.display_order.popup;
                 IgnoreGuiInset = true;
             }); 
 
@@ -2606,6 +2620,7 @@
                 Name = "multyhub";
                 Enabled = true;
                 ZIndexBehavior = Enum.ZIndexBehavior.Global;
+                DisplayOrder = library.display_order.notification;
                 IgnoreGuiInset = true;
             });
 
@@ -5379,6 +5394,8 @@
                 task.wait()
                 items[ "key" ].Text = "..."	
 
+                library._keybind_capture = cfg
+
                 cfg.binding = library:connection(uis.InputBegan, function(keycode, game_event)  
                     cfg._rebinding = true
                     cfg.set(keycode.KeyCode ~= Enum.KeyCode.Unknown and keycode.KeyCode or keycode.UserInputType)
@@ -5386,6 +5403,10 @@
                     
                     cfg.binding:Disconnect() 
                     cfg.binding = nil
+
+                    if library._keybind_capture == cfg then
+                        library._keybind_capture = nil
+                    end
                 end)
             end)
 
@@ -7909,6 +7930,14 @@ do -- Menu input ownership
             node = node.Parent
         end
         return false
+    end
+
+    -- Focused textbox, or a keybind waiting on the next press.
+    function library:owns_keyboard()
+        if library._keybind_capture ~= nil then
+            return true
+        end
+        return library:owns_focused_textbox()
     end
 end
 
