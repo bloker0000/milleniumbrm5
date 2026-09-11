@@ -838,14 +838,13 @@
         end
 
         function library:_keybind_list_has_key(key)
-            if not key or key == "NONE" then
+            if not key then
                 return false
             end
 
-            local key_string = tostring(key)
-            return key_string ~= "Enum.KeyCode.Unknown"
-                and key_string ~= "Enum.UserInputType.None"
-                and key_string ~= "Unknown"
+            -- KeyCode.Unknown stringifies as "Enum.KeyCode.None" now
+            local name = typeof(key) == "EnumItem" and key.Name or tostring(key):match("([%w_]+)$")
+            return name ~= nil and name ~= "NONE" and name ~= "None" and name ~= "Unknown"
         end
 
         function library:_keybind_list_key_text(key)
@@ -5338,10 +5337,10 @@
                     if cfg.mode == "Always" then 
                         cfg.active = true
                     end
-                elseif tostring(input):find("Enum") then 
-                    input = input.Name == "Escape" and "NONE" or input
-                    
-                    cfg.key = input or "NONE"	
+                elseif tostring(input):find("Enum") then
+                    input = (input.Name == "Escape" or not library:_keybind_list_has_key(input)) and "NONE" or input
+
+                    cfg.key = input or "NONE"
                 elseif find({"Toggle", "Hold", "Always"}, input) then 
                     if input == "Always" then 
                         cfg.active = true 
@@ -5350,8 +5349,12 @@
                     cfg.mode = input
                     cfg.set_mode(cfg.mode) 
                 elseif type(input) == "table" then 
-                    input.key = type(input.key) == "string" and input.key ~= "NONE" and library:convert_enum(input.key) or input.key
-                    input.key = input.key == Enum.KeyCode.Escape and "NONE" or input.key
+                    if type(input.key) == "string" and library:_keybind_list_has_key(input.key) then
+                        input.key = library:convert_enum(input.key)
+                    end
+                    if not library:_keybind_list_has_key(input.key) or input.key == Enum.KeyCode.Escape then
+                        input.key = "NONE"
+                    end
 
                     cfg.key = input.key or "NONE"
                     cfg.mode = input.mode or "Toggle"
