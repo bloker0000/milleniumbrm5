@@ -1157,24 +1157,6 @@
             local items = list.items
             local options = list.options
 
-            if library._keybind_list_lock_defaults == true and library._keybind_list_user_touched ~= true then
-                options.enabled = true
-                options.mode = "All"
-                options.show_unbound = false
-                options.auto_height = true
-
-                local sync_controls = library._keybind_list_sync_controls
-                if type(sync_controls) == "function" and library._keybind_list_syncing_controls ~= true then
-                    local previous_syncing = library._keybind_list_syncing_controls
-                    local previous_forcing = library._keybind_list_forcing_defaults
-                    library._keybind_list_syncing_controls = true
-                    library._keybind_list_forcing_defaults = true
-                    sync_controls()
-                    library._keybind_list_forcing_defaults = previous_forcing
-                    library._keybind_list_syncing_controls = previous_syncing
-                end
-            end
-
             if not items["outline"] then
                 if not library["keybind_gui"] and not coregui then
                     return
@@ -1429,35 +1411,22 @@
             local list = library:_ensure_keybind_list()
             local opts = list.options
             options = options or {}
-            local lock_false = library._keybind_list_lock_defaults == true and library._keybind_list_user_touched ~= true and library._keybind_list_user_change ~= true
 
             if options.enabled ~= nil then
-                if not (lock_false and options.enabled ~= true) then
-                    opts.enabled = options.enabled == true
-                end
+                opts.enabled = options.enabled == true
             end
             if options.mode then
-                if not (lock_false and tostring(options.mode) ~= "All") then
-                    opts.mode = options.mode
-                end
+                opts.mode = options.mode
             end
             if options.show_unbound ~= nil then
-                if not (lock_false and options.show_unbound ~= false) then
-                    opts.show_unbound = options.show_unbound == true
-                end
+                opts.show_unbound = options.show_unbound == true
             elseif options.showUnbound ~= nil then
-                if not (lock_false and options.showUnbound ~= false) then
-                    opts.show_unbound = options.showUnbound == true
-                end
+                opts.show_unbound = options.showUnbound == true
             end
             if options.auto_height ~= nil then
-                if not (lock_false and options.auto_height ~= true) then
-                    opts.auto_height = options.auto_height == true
-                end
+                opts.auto_height = options.auto_height == true
             elseif options.autoHeight ~= nil then
-                if not (lock_false and options.autoHeight ~= true) then
-                    opts.auto_height = options.autoHeight == true
-                end
+                opts.auto_height = options.autoHeight == true
             end
             if options.width then
                 opts.width = clamp(tonumber(options.width) or opts.width, 160, 420)
@@ -1598,6 +1567,12 @@
                         game_name = nil,
                     }
                     library._info_list = info
+
+                    local saved = library._decode_hud_position and library:_decode_hud_position("info_list_pos")
+                    if saved then
+                        info.options.position = saved
+                        info._user_position = true
+                    end
                 end
                 return info
             end
@@ -2493,7 +2468,18 @@
                 local panel = col1:section({ name = "Panel", icon = "rbxassetid://7733970318", default = true })
 
                 panel:toggle({ name = "Enable Info Panel", flag = "info_enabled", default = true, seperator = true, callback = function(v) opts.enabled = v; apply() end })
-                panel:dropdown({ name = "Position", flag = "info_corner", items = { "Top Right", "Top Left", "Bottom Right", "Bottom Left" }, default = "Top Right", seperator = true, callback = function(v) opts.corner = v; apply() end })
+                panel:dropdown({ name = "Position", flag = "info_corner", items = { "Top Right", "Top Left", "Bottom Right", "Bottom Left" }, default = "Top Right", seperator = true, callback = function(v)
+                    opts.corner = v
+                    local info = library._info_list
+                    if info then
+                        info._user_position = false
+                        info.options.position = nil
+                    end
+                    for _, suffix in { "_x_scale", "_x_offset", "_y_scale", "_y_offset" } do
+                        library.flags["info_list_pos" .. suffix] = nil
+                    end
+                    apply()
+                end })
                 panel:dropdown({ name = "Layout", flag = "info_layout", items = { "Vertical", "Horizontal" }, default = "Vertical", seperator = true, callback = function(v) opts.layout = v; apply() end })
                 panel:slider({ name = "Items Per Column", flag = "info_per_column", min = 1, max = 12, default = 4, seperator = true, callback = function(v) opts.per_column = v; apply() end })
                 panel:slider({ name = "Width", flag = "info_width", min = 110, max = 360, default = 200, suffix = "px", seperator = true, callback = function(v) opts.width = v; apply() end })
@@ -4303,14 +4289,14 @@
                 local isTable = type(value) == "table"
 
                 for _, option in cfg.option_instances do 
-                    if option.Text == value or (isTable and find(value, option.Text)) then 
+                    if option.Text == value or (isTable and find(value, option.Text)) then
                         insert(selected, option.Text)
-                        cfg.multi_items = selected
                         option.TextColor3 = themes.preset.accent
                     else
                         option.TextColor3 = rgb(72, 72, 73)
                     end
                 end
+                cfg.multi_items = selected
 
                 items[ "sub_text" ].Text = isTable and concat(selected, ", ") or selected[1] or ""
                 flags[cfg.flag] = isTable and selected or selected[1]
@@ -5856,107 +5842,16 @@
 
             local column = keybind_page:column({})
                 local section = column:section({name = "Keybind List", side = "right", size = 1, default = true, icon = "rbxassetid://7733924046"})
-            library._keybind_list_lock_defaults = true
-            local function update_keybind_list_from_control(options)
-                local previous_user_change = library._keybind_list_user_change
-                if not library._keybind_list_forcing_defaults and not library._keybind_list_syncing_controls then
-                    library._keybind_list_user_touched = true
-                    library._keybind_list_user_change = true
-                end
-                library:keybind_list(options)
-                library._keybind_list_user_change = previous_user_change
-            end
-            local keybind_list_enabled = section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = true, callback = function(bool) update_keybind_list_from_control({enabled = bool}) end})
-            local keybind_list_mode = section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = "All", width = 92, callback = function(value) update_keybind_list_from_control({mode = value}) end})
-            local keybind_list_show_unbound = section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = false, callback = function(bool) update_keybind_list_from_control({show_unbound = bool}) end})
-            local keybind_list_auto_height = section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = true, callback = function(bool) update_keybind_list_from_control({auto_height = bool}) end})
+            local keybind_list_enabled = section:toggle({name = "Enabled", flag = "keybind_list_enabled", default = true, callback = function(bool) library:keybind_list({enabled = bool}) end})
+            local keybind_list_mode = section:dropdown({name = "Mode", flag = "keybind_list_mode", items = {"All", "Active"}, default = "All", width = 92, callback = function(value) library:keybind_list({mode = value}) end})
+            local keybind_list_show_unbound = section:toggle({name = "Show Unbound", flag = "keybind_list_show_unbound", default = false, callback = function(bool) library:keybind_list({show_unbound = bool}) end})
+            local keybind_list_auto_height = section:toggle({name = "Auto Height", flag = "keybind_list_auto_height", default = true, callback = function(bool) library:keybind_list({auto_height = bool}) end})
             library._keybind_list_controls = {
                 enabled = keybind_list_enabled,
                 mode = keybind_list_mode,
                 show_unbound = keybind_list_show_unbound,
                 auto_height = keybind_list_auto_height,
             }
-            local function set_keybind_list_toggle(control, value)
-                if not control then
-                    return
-                end
-
-                value = value == true
-                control.enabled = value
-                flags[control.flag] = value
-
-                local control_items = control.items
-                if not control_items then
-                    return
-                end
-
-                if control.type == "checkbox" then
-                    if control_items["tick"] then
-                        control_items["tick"].Rotation = value and 0 or 45
-                        control_items["tick"].ImageTransparency = value and 0 or 1
-                    end
-                    if control_items["toggle_button"] then
-                        control_items["toggle_button"].BackgroundColor3 = value and themes.preset.accent or rgb(67, 67, 68)
-                    end
-                    if control_items["outline"] then
-                        control_items["outline"].BackgroundColor3 = value and themes.preset.accent or rgb(22, 22, 24)
-                    end
-                else
-                    if control_items["toggle_button"] then
-                        control_items["toggle_button"].BackgroundColor3 = value and themes.preset.accent or rgb(58, 58, 62)
-                    end
-                    if control_items["inline"] then
-                        control_items["inline"].BackgroundColor3 = value and themes.preset.accent or rgb(50, 50, 50)
-                    end
-                    if control_items["circle"] then
-                        control_items["circle"].BackgroundColor3 = value and rgb(255, 255, 255) or rgb(86, 86, 88)
-                        control_items["circle"].Position = value and dim2(1, -14, 0, 2) or dim2(0, 2, 0, 2)
-                    end
-                end
-            end
-            local function set_keybind_list_mode(control, value)
-                if not control then
-                    return
-                end
-
-                value = tostring(value or "All")
-                flags[control.flag] = value
-
-                local control_items = control.items
-                if control_items and control_items["sub_text"] then
-                    control_items["sub_text"].Text = value
-                end
-
-                if control.option_instances then
-                    for _, option in control.option_instances do
-                        option.TextColor3 = option.Text == value and themes.preset.accent or rgb(72, 72, 73)
-                    end
-                end
-            end
-            local function sync_keybind_list_controls()
-                set_keybind_list_toggle(keybind_list_enabled, true)
-                set_keybind_list_mode(keybind_list_mode, "All")
-                set_keybind_list_toggle(keybind_list_show_unbound, false)
-                set_keybind_list_toggle(keybind_list_auto_height, true)
-            end
-            library._keybind_list_sync_controls = sync_keybind_list_controls
-            local function force_keybind_list_defaults()
-                local previous_forcing = library._keybind_list_forcing_defaults
-                local previous_syncing = library._keybind_list_syncing_controls
-                library._keybind_list_forcing_defaults = true
-                library._keybind_list_syncing_controls = true
-                sync_keybind_list_controls()
-                library:keybind_list({
-                    enabled = true,
-                    mode = "All",
-                    show_unbound = false,
-                    auto_height = true,
-                    width = library:_keybind_list_option("width", 215),
-                    height = library:_keybind_list_option("max_height", 250),
-                })
-                library._keybind_list_syncing_controls = previous_syncing
-                library._keybind_list_forcing_defaults = previous_forcing
-            end
             section:slider({name = "Width", flag = "keybind_list_width", min = 180, max = 340, default = library:_keybind_list_option("width", 215), suffix = "px", callback = function(value) library:keybind_list({width = value}) end})
             section:slider({name = "Height", flag = "keybind_list_height", min = 120, max = 420, default = library:_keybind_list_option("max_height", 250), suffix = "px", callback = function(value) library:keybind_list({height = value}) end})
             local opacity_default = library:_keybind_list_option("background_opacity", 1)
@@ -5984,37 +5879,12 @@
                     end
                 end,
             })
-            local function guard_keybind_list_setter(flag, control)
-                local raw_set = control and control.set
-                if type(raw_set) ~= "function" then
-                    return
-                end
-                config_flags[flag] = function(value)
-                    if library._keybind_list_lock_defaults == true and library._keybind_list_user_touched ~= true and library._keybind_list_user_change ~= true then
-                        force_keybind_list_defaults()
-                    else
-                        raw_set(value)
-                    end
-                end
-            end
-            local function guard_keybind_list_mode_setter(control)
-                local raw_set = control and control.set
-                if type(raw_set) ~= "function" then
-                    return
-                end
-                config_flags["keybind_list_mode"] = function(value)
-                    if library._keybind_list_lock_defaults == true and library._keybind_list_user_touched ~= true and library._keybind_list_user_change ~= true then
-                        force_keybind_list_defaults()
-                    else
-                        raw_set(value)
-                    end
-                end
-            end
-            guard_keybind_list_mode_setter(keybind_list_mode)
-            guard_keybind_list_setter("keybind_list_enabled", keybind_list_enabled)
-            guard_keybind_list_setter("keybind_list_show_unbound", keybind_list_show_unbound)
-            guard_keybind_list_setter("keybind_list_auto_height", keybind_list_auto_height)
-            force_keybind_list_defaults()
+            library:keybind_list({
+                enabled = flags["keybind_list_enabled"] ~= false,
+                mode = flags["keybind_list_mode"] or "All",
+                show_unbound = flags["keybind_list_show_unbound"] == true,
+                auto_height = flags["keybind_list_auto_height"] ~= false,
+            })
         end
 
     -- Notification Library
